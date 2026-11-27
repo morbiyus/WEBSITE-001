@@ -121,20 +121,23 @@ button{cursor:pointer;font-family:inherit;border:none;background:none;}
 
 .page.page-hidden{
   opacity:0;
+  visibility:hidden;
   pointer-events:none;
   transform:rotateY(-18deg) translateX(60px) scale(0.95);
 }
 
 .page.page-current{
   opacity:1;
+  visibility:visible;
   pointer-events:auto;
   transform:none;
 }
 
 /* page enter from right */
 .page.page-enter{
-  transform:rotateY(18deg) translateX(-60px) scale(0.95);
   opacity:0;
+  visibility:visible;
+  transform:rotateY(18deg) translateX(-60px) scale(0.95);
 }
 
 /* ========== HERO ========== */

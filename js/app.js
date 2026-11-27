@@ -24,7 +24,7 @@
       this.renderGames();
       this.updateNav();
       this.show(this.currentPage, false);
-      this.checkSession();
+      // Do not auto-redirect to profile on load; nav reflects login state.
     },
 
     /* ---------- Navigation ---------- */
@@ -60,19 +60,17 @@
       const to = document.getElementById('page-'+page);
       if(!from || !to) return;
 
-      // exit current
+      // exit current immediately
       from.classList.remove('page-current','page-enter');
       from.classList.add('page-hidden');
 
-      // enter next
-      setTimeout(()=>{
-        to.classList.remove('page-hidden');
-        to.classList.add('page-enter');
-        requestAnimationFrame(()=>{
-          to.classList.remove('page-enter');
-          to.classList.add('page-current');
-        });
-      }, 260);
+      // enter next immediately (no overlap)
+      to.classList.remove('page-hidden');
+      to.classList.add('page-enter');
+      requestAnimationFrame(()=>{
+        to.classList.remove('page-enter');
+        to.classList.add('page-current');
+      });
 
       this.currentPage = page;
       this.onPageShow(page, data);
@@ -90,12 +88,6 @@
     },
 
     /* ---------- Session ---------- */
-    checkSession(){
-      if(this.session){
-        this.show('profile');
-      }
-    },
-
     setSession(user){
       this.session = {username: user.username, email: user.email};
       localStorage.setItem(STORAGE_SESSION, JSON.stringify(this.session));
@@ -151,7 +143,7 @@
 
     /* ---------- AUTH ---------- */
     authInit(data){
-      const mode = data.mode || (this.session ? 'profile' : 'login');
+      const mode = data.mode || 'login';
       this.signupState = {step:1,username:'',email:'',password:'',verifyCode:'',codeEntered:''};
       this.renderAuth(mode);
     },
