@@ -10,7 +10,9 @@
  * Environment Variables Required:
  * - VITE_SUPABASE_URL: Your Supabase project URL
  * - VITE_SUPABASE_ANON_KEY: Your Supabase anon key
- * - SESSION_SECRET: Secret for signing cookies (server-side)
+ *
+ * Note: SESSION_SECRET is not required — Supabase manages session tokens
+ * securely via its own cookie-based authentication mechanism.
  */
 
 export default async function handler(req, res) {
@@ -27,7 +29,7 @@ export default async function handler(req, res) {
   if (!email || !password) {
     return res.status(400).json({
       success: false,
-      error: 'İstifadəçi adı və şifrə daxil edin.'
+      error: 'İstifadəçi adı və ya şifrə daxil edin.'
     });
   }
 
@@ -38,7 +40,7 @@ export default async function handler(req, res) {
   if (!supabaseUrl || !supabaseAnonKey) {
     return res.status(503).json({
       success: false,
-      error: 'Server reconfigured: Supabase moveqli yanlış. Təlav edilən environment variables yoxdur.'
+      error: 'Server reconfigured: Supabase konfiqurasiyası yoxdur.'
     });
   }
 
@@ -58,13 +60,14 @@ export default async function handler(req, res) {
       return resp.json();
     })
     .then(data => {
-      // Set secure cookie with session
-      const sessionToken = Buffer.from(`${data.user.id}:${Date.now()}`).toString('base64');
-      res.setHeader('Set-Cookie', `session=${sessionToken}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=86400`);
+      // Set Supabase session cookie
+      if (data.session && data.session.access_token) {
+        res.setHeader('Set-Cookie', `supabase_auth_token=${data.session.access_token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${Math.floor(data.session.expires_in / 1000)}`);
+      }
       return res.status(200).json({
         success: true,
         user: data.user,
-        session: sessionToken
+        session: data.session?.access_token
       });
     })
     .catch(err => {

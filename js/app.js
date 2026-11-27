@@ -1,4 +1,4 @@
-/* ========== VAZEDGAME — App Logic (Supabase Auth via API, Zero Budget Frontend) ========== */
+/* ========== VAZEDGAME — App Logic (Supabase Auth, Zero Budget Frontend) ========== */
 (function(){
   const STORAGE_DEMO_SESSION = 'vz_demo_session';
   const DEMO_MODE = true;
@@ -142,7 +142,7 @@
       `;
     },
 
-    /* ---------- AUTH (API-based Supabase Auth, 4-field Registration) ---------- */
+    /* ---------- AUTH (Supabase Auth via API) ---------- */
     authInit(data) {
       const mode = data.mode || 'login';
       this.signupState = {
@@ -273,7 +273,6 @@
           s.username = val;
           uInp.value = val;
           document.getElementById('errUsername').classList.remove('show');
-          this.validateUsername();
         });
       }
       const eInp = document.getElementById('suEmail');
@@ -315,24 +314,7 @@
         this.showErr('errUsername', 'İstifadəçi adı ən azı 3 simvol olmalıdır.');
         return false;
       }
-      // Check for duplicate username via API
-      this.checkDuplicateUsername(s.username);
       return true;
-    },
-
-    async checkDuplicateUsername(username) {
-      try {
-        const res = await fetch('/api/auth/session', { method: 'GET' });
-        // We'll just validate format; duplicate check is server-side
-        const errEl = document.getElementById('errUsername');
-        if(errEl) {
-          errEl.textContent = 'Frox verifikasi (server-side)...';
-          errEl.classList.add('show');
-          setTimeout(()=>{ errEl.classList.remove('show'); }, 2000);
-        }
-      } catch (err) {
-        console.error('Duplicate check error:', err);
-      }
     },
 
     validatePassword() {
@@ -420,7 +402,7 @@
       return true;
     },
 
-    /* ---------- finishSignup: Register via API ---------- */
+    /* ---------- finishSignup: Register via New API ---------- */
     finishSignup() {
       if(!this.validateStep()) return;
       const s = this.signupState;
@@ -433,14 +415,13 @@
       s.sending = true;
       this.renderSignupStep();
 
-      // Register via API
-      fetch('/api/auth/session', {
+      // Register via the new /api/auth/register endpoint
+      fetch('/api/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          action: 'signup',
           username: s.username,
           email: s.email,
           password: s.password
@@ -451,8 +432,9 @@
         s.sending = false;
         this.renderSignupStep();
         if(result.success) {
-          this.setDemoSession(s.username, s.email);
-          this.toast('Qeydiyyat Supabase/API ilə tamamlandı.');
+          // Registration successful - get session and login the user
+          this.loginAfterRegister(s.username, s.email);
+          this.toast('Qeydiyyat Supabase/API ilə tamamlandı. E-poçt doğrulaması tələb edilmir.');
           this.show('home');
         } else {
           this.showErr('errEmailFinal', result.error || 'Bilinmeyen xəta');
@@ -468,6 +450,35 @@
       });
     },
 
+    /* ---------- LOGIN after registration ---------- */
+    loginAfterRegister(username, email) {
+      // Automatically login the newly registered user
+      fetch('/api/auth/session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'login', email, password: this.signupState.password })
+      })
+      .then(res => res.json())
+      .then(result => {
+        if(result.success && result.user) {
+          this.session = {
+            username: result.user.username || result.user.email || username,
+            email: result.user.email || email,
+            demo: false
+          };
+          this.updateNav();
+          this.toast('Avtomatik daxil olundu.');
+        } else {
+          this.toast('Qeydiyyat uğurlacompleted, lakin daxil olma imkan yoxdu.');
+        }
+      })
+      .catch(err => {
+        console.error('Login after register error:', err);
+      });
+    },
+
     /* ---------- LOGIN (via API) ---------- */
     login() {
       const email = document.getElementById('liEmail').value.trim();
@@ -478,12 +489,12 @@
         return;
       }
 
-      fetch('/api/auth/login', {
+      fetch('/api/auth/session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ action: 'login', email, password })
       })
       .then(res => res.json())
       .then(result => {
@@ -497,7 +508,7 @@
           this.toast('Daxil olundu.');
           this.show('home');
         } else {
-          this.toast('Yanlış e-poçt və ya şifrə. Daxil olma imkanı yoxdur.');
+          this.toast('Yanlış e-poçt və ya şifrə. Daxil olma imkan yoxdur.');
         }
       })
       .catch(err => {
@@ -508,16 +519,22 @@
 
     /* ---------- LOGOUT ---------- */
     logout() {
-      // Call server logout
-      fetch('/api/auth/logout', { method: 'POST' })
-        .then(()=>{})
-        .catch(()=>{});
+      // Call server logout via session endpoint
+      fetch('/api/auth/session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'logout' })
+      })
+      .then(()=>{})
+      .catch(()=>{});
 
       // Clear sessionStorage
       sessionStorage.removeItem(STORAGE_DEMO_SESSION);
       
-      // Clear cookie
-      document.cookie = 'session=; Path=/; HttpOnly; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict';
+      // Clear the Supabase auth cookie
+      document.cookie = 'supabase_auth_token=; Path=/; HttpOnly; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict';
 
       this.session = null;
       this.updateNav();

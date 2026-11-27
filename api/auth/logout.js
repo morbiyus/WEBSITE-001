@@ -4,12 +4,14 @@
  * Endpoint: POST /api/auth/logout
  *
  * Invalidates the user session via Supabase Auth.
- * Clears the secure HTTP-only cookie.
+ * Clears the secure HTTP-only session cookie.
  *
  * Environment Variables Required:
  * - VITE_SUPABASE_URL: Your Supabase project URL
  * - VITE_SUPABASE_ANON_KEY: Your Supabase anon key
- * - SESSION_SECRET: Secret for signing cookies (server-side)
+ *
+ * Note: SESSION_SECRET is not required — Supabase manages session token
+ * invalidation through its signOut endpoint.
  */
 
 export default async function handler(req, res) {
@@ -25,8 +27,8 @@ export default async function handler(req, res) {
   const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    // Even without Supabase config, clear local sessionStorage
-    res.setHeader('Set-Cookie', 'session=; Path=/; HttpOnly; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict');
+    // Even without Supabase config, clear any local session data
+    res.setHeader('Set-Cookie', 'supabase_auth_token=; Path=/; HttpOnly; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict');
     return res.status(200).json({
       success: true,
       message: 'Oturum(dayıxma demo rejimində həyata keçirilir.'
@@ -47,7 +49,7 @@ export default async function handler(req, res) {
     })
     .then(() => {
       // Clear the secure cookie
-      res.setHeader('Set-Cookie', 'session=; Path=/; HttpOnly; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict');
+      res.setHeader('Set-Cookie', 'supabase_auth_token=; Path=/; HttpOnly; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict');
       return res.status(200).json({
         success: true,
         message: 'Sistemdən çıxış etdiniz (demo rejim).'
@@ -56,7 +58,7 @@ export default async function handler(req, res) {
     .catch(err => {
       console.error('Logout error:', err);
       // Still clear the cookie even if Supabase call fails
-      res.setHeader('Set-Cookie', 'session=; Path=/; HttpOnly; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict');
+      res.setHeader('Set-Cookie', 'supabase_auth_token=; Path=/; HttpOnly; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict');
       return res.status(200).json({
         success: true,
         message: 'Sistemdən çıxış etdiniz (demo rejim - Supabase xeta).'
