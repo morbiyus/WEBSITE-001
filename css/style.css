@@ -407,6 +407,13 @@ button{cursor:pointer;font-family:inherit;border:none;background:none;}
   max-width:460px;
   text-align:center;
 }
+.profile-actions{
+  display:flex;
+  gap:12px;
+  justify-content:center;
+  margin-top:14px;
+}
+.profile-actions .btn{flex:1;max-width:220px;}
 .profile-info{margin:24px 0;color:var(--gray);font-size:1.05rem;}
 
 /* ========== FOOTER ========== */

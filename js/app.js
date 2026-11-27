@@ -100,7 +100,7 @@
       this.session = {username: user.username, email: user.email};
       localStorage.setItem(STORAGE_SESSION, JSON.stringify(this.session));
       this.updateNav();
-      this.show('profile');
+      this.show('home');
     },
 
     logout(){
