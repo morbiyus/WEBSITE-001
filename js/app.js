@@ -55,16 +55,19 @@
 
     /* ---------- Page switching with 3D transition ---------- */
     show(page, data){
-      if(page === this.currentPage && !data) return;
-      const from = document.getElementById('page-'+this.currentPage);
       const to = document.getElementById('page-'+page);
-      if(!from || !to) return;
+      if(!to) return;
 
-      // exit current immediately
-      from.classList.remove('page-current','page-enter');
-      from.classList.add('page-hidden');
+      // Reset ALL pages: hide everything first (mutual exclusivity).
+      // This guarantees no modal/popup/overlay from a previous route
+      // stays visible, and fixes the initial-load case where pages that
+      // were never "shown" never received page-hidden.
+      document.querySelectorAll('.page').forEach(el=>{
+        el.classList.remove('page-current','page-enter');
+        el.classList.add('page-hidden');
+      });
 
-      // enter next immediately (no overlap)
+      // Show only the target page
       to.classList.remove('page-hidden');
       to.classList.add('page-enter');
       requestAnimationFrame(()=>{
