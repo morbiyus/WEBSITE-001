@@ -1,6 +1,6 @@
-// VAZEDGAME - oyunlar burada hazırlanır (tələblərənən)
+// VAZEDGAME — oyunlar burada hazırlanır (tələblərənən)
 
-// Placeholder: Klikləyici oyunu mantığı buraya yazılacaq
+// Placeholder: Bütün oyunlar hələ hazırlanma mərhələsindədir.
 export const placeholderGame = {
   id: 'clicker',
   title: 'Klikləyici',

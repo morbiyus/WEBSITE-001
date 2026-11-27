@@ -6,10 +6,15 @@
     { "src": "index.html", "use": "@vercel/static" },
     { "src": "css/*.css", "use": "@vercel/static" },
     { "src": "js/*.js", "use": "@vercel/static" },
-    { "src": "games/*.js", "use": "@vercel/static" }
+    { "src": "games/*.js", "use": "@vercel/static" },
+    { "src": "favicon.svg", "use": "@vercel/static" }
   ],
   "routes": [
-    { "src": "/api/auth/(.*)", "dest": "/api/auth/$1" },
+    { "src": "/api/auth/send-code", "dest": "/api/auth/send-code.js" },
+    { "src": "/api/auth/verify-code", "dest": "/api/auth/verify-code.js" },
+    { "src": "/api/auth/login", "dest": "/api/auth/login.js" },
+    { "src": "/api/auth/logout", "dest": "/api/auth/logout.js" },
+    { "src": "/api/auth/session", "dest": "/api/auth/session.js" },
     { "src": "/(.*)", "dest": "/$1" }
   ],
   "cleanUrls": true,

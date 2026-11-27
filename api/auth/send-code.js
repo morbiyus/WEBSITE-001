@@ -1,75 +1,40 @@
 /**
- * VAZEDGAME — Email verification code sender (Vercel serverless function)
+ * VAZEDGAME — Send Email Verification Code (Vercel serverless function)
  *
  * Endpoint: POST /api/auth/send-code
  * Body: { email }
  *
  * Behavior:
- *  - Generates a random 6-digit verification code.
- *  - Sends it to the provided email address via Resend.
- *  - Stores the pending code (with 5-minute expiry) in memory.
- *  - Enforces rate limiting (max 3 sends per 5 minutes per email/IP).
+ *  - Generates a cryptographically secure 6-digit verification code.
+ *  - Hashes the code before storage (never stores raw codes).
+ *  - Sends the code to the email via Resend.
+ *  - Returns success ONLY if Resend accepts the email.
+ *  - Enforces rate limiting (max 3 sends per 15 minutes per IP+email).
+ *  - 60-second cooldown between resends for the same email.
  *
- * Required environment variable (set in Vercel project settings):
+ * Required environment variables (Vercel Project Settings):
  *   RESEND_API_KEY — your Resend API key
- *   RESEND_FROM_EMAIL — verified sender address (default: onboarding@resend.dev)
+ *   RESEND_FROM_EMAIL — verified sender address (e.g. onboarding@resend.dev)
  */
 
 import { Resend } from 'resend';
-
-// In-memory store for pending verification codes (per serverless instance).
-// For production, replace with Vercel KV / Upstash Redis / database.
-const pendingCodes = new Map(); // key -> { code, expiresAt, attempts, resendCount, lastResendAt }
-
-// Rate-limit store (per IP/email): { lastSendAt, count }
-const rateLimitStore = new Map();
+import {
+  pendingCodes,
+  rateLimitStore,
+  CODE_TTL_MS,
+  MAX_SENDS_PER_WINDOW,
+  RATE_WINDOW_MS,
+  MAX_VERIFY_ATTEMPTS,
+  RESEND_COOLDOWN_MS,
+  now,
+  generateCode,
+  getClientIp,
+  isRateLimited,
+  registerSend,
+} from './shared-store.js';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
-
-const CODE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-const MAX_SENDS_PER_WINDOW = 3;
-const RATE_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-const MAX_VERIFY_ATTEMPTS = 5;
-
-function now() {
-  return Date.now();
-}
-
-function generateCode() {
-  return String(Math.floor(100000 + Math.random() * 900000));
-}
-
-function getClientIp(req) {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (forwarded) return forwarded.split(',')[0].trim();
-  return req.headers['x-real-ip'] || 'unknown';
-}
-
-function rateLimitKey(ip, email) {
-  return `${ip}:${email}`;
-}
-
-function isRateLimited(key) {
-  const entry = rateLimitStore.get(key);
-  if (!entry) return false;
-  if (now() - entry.lastSendAt > RATE_WINDOW_MS) {
-    rateLimitStore.delete(key);
-    return false;
-  }
-  return entry.count >= MAX_SENDS_PER_WINDOW;
-}
-
-function registerSend(key) {
-  const entry = rateLimitStore.get(key) || { lastSendAt: 0, count: 0 };
-  if (now() - entry.lastSendAt > RATE_WINDOW_MS) {
-    entry.count = 0;
-    entry.lastSendAt = now();
-  }
-  entry.count++;
-  entry.lastSendAt = now();
-  rateLimitStore.set(key, entry);
-}
 
 export default async function handler(req, res) {
   // CORS
@@ -98,33 +63,36 @@ export default async function handler(req, res) {
     if (isRateLimited(key)) {
       return res.status(429).json({
         success: false,
-        error: 'Çox təbdirložendəsiniz. Zəhmət olmasa, daha sonra yenidən cəhd edin.'
+        error: 'Çox speciesdə kodu tələb edibsiz. Zəhmət olmasa, daha sonra yenidən cəhd edin.'
       });
     }
 
-    // Check for existing pending code for this email (avoid duplicate sends within short window)
+    // Check resend cooldown for this email
     const existing = pendingCodes.get(email);
-    if (existing && now() - existing.lastResendAt < 60000) {
+    if (existing && now() - existing.lastResendAt < RESEND_COOLDOWN_MS) {
+      const remaining = Math.ceil((RESEND_COOLDOWN_MS - (now() - existing.lastResendAt)) / 1000);
       return res.status(429).json({
         success: false,
-        error: 'Kod indi göndərilib. Zəhmət olmasa 1 dəqiqə gözləyin.'
+        error: `Kod indi göndərilib. Zəhmət olmasa ${remaining} saniyə gözləyin.`
       });
     }
 
     const code = generateCode();
     const expiresAt = now() + CODE_TTL_MS;
 
+    // Store HASHED code — never store raw verification codes
+    const codeHash = await hashCode(code);
+
     pendingCodes.set(email, {
-      code,
+      codeHash,
       expiresAt,
       attempts: 0,
-      resendCount: 0,
       lastResendAt: now()
     });
 
     registerSend(key);
 
-    // Send email via Resend
+    // Send email via Resend — return success ONLY if Resend accepts it
     const html = `
       <div style="font-family: system-ui, -apple-system, sans-serif; background:#0a0a0a; color:#fff; padding:24px; border-radius:12px; max-width:600px; margin:0 auto;">
         <div style="text-align:center; margin-bottom:24px;">
@@ -138,24 +106,34 @@ export default async function handler(req, res) {
           <span style="font-size:32px; font-weight:800; letter-spacing:8px; color:#FFD200; display:inline-block;">${code.split('').join(' ')}</span>
         </div>
         <p style="font-size:14px; color:#888; margin-bottom:20px;">
-          Kod 5 dəqiqə ərzində geçerlidir. Kodu başkası ilə paylaşmayın.
+          Kod 5 dəqiqə ərzində qüvvədədir. Kodu başkası ilə paylaşmayın.
         </p>
         <hr style="border:none; border-top:1px solid rgba(255,210,0,0.15); margin-bottom:20px;">
         <p style="font-size:12px; color:#666;">
-          Bu e-poçt VAZEDGAME-ə terkib olub. Əgər siz bu əmaliyyatı aparmıyazsınızsa, bu e-poçtı eşitməyəyin.
+          Bu e-poçt VAZEDGAME tərəfinden göndərilib. Əgər siz bu əməliyyatı aparmıyazsınızsa, bu e-poçtı eşitməyəyin.
         </p>
       </div>
     `;
 
-    const text = `VAZEDGAME - Doğrulama kodunuz: ${code}. Kod 5 dəqiqə ərzində geçerlidir.`;
+    const text = `VAZEDGAME - Doğrulama kodunuz: ${code}. Kod 5 dəqiqə ərzində qüvvədədir.`;
 
-    await resend.emails.send({
+    const sendResult = await resend.emails.send({
       from: FROM_EMAIL,
       to: email,
       subject: 'VAZEDGAME - Doğrulama kodunuz',
       text,
       html
     });
+
+    // Resend returns { data: { id } } on success. If no data.id, the email was not accepted.
+    if (!sendResult.data || !sendResult.data.id) {
+      // Remove the pending code since email was not sent
+      pendingCodes.delete(email);
+      return res.status(500).json({
+        success: false,
+        error: 'E-poçt göndərilə bilmədi. Zəhmət olmasa, daha sonra yenidən cəhd edin.'
+      });
+    }
 
     return res.status(200).json({
       success: true,
@@ -166,7 +144,12 @@ export default async function handler(req, res) {
     console.error('send-code error:', err);
     return res.status(500).json({
       success: false,
-      error: 'E-poçt göndərilə bilmədi. Zəhmət olmasa, daha sonra yenidən cəhd edin.'
+      error: 'E-poçt göndərilərkən xəta baş verdi. Zəhmət olmasa, daha sonra yenidən cəhd edin.'
     });
   }
+}
+
+async function hashCode(code) {
+  const bcrypt = await import('bcryptjs');
+  return bcrypt.hashSync(code, 10);
 }

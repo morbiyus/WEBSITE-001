@@ -1,29 +1,42 @@
 /**
- * VAZEDGAME — Verify email verification code & complete registration (Vercel serverless function)
+ * VAZEDGAME — Verify Email Code & Complete Registration (Vercel serverless function)
  *
  * Endpoint: POST /api/auth/verify-code
  * Body: { email, code, username, password }
  *
  * Behavior:
- *  - Looks up the pending verification code for the email.
+ *  - Looks up the pending hashed verification code for the email.
  *  - Checks expiry (5 minutes) and max attempts (5).
- *  - If valid, creates the user account.
+ *  - Compares the submitted code against the stored hash using bcrypt.
+ *  - If valid, creates the user account with hashed password and marks email verified.
  *  - Removes the pending code after successful verification.
  *
- * Required environment variable (set in Vercel project settings):
+ * Required environment variables (Vercel Project Settings):
  *   RESEND_API_KEY — your Resend API key
  *   RESEND_FROM_EMAIL — verified sender address
  */
 
 import { Resend } from 'resend';
-
-const pendingCodes = new Map(); // must match send-code.js (same runtime instance ideal)
-
-const CODE_TTL_MS = 5 * 60 * 1000;
-const MAX_VERIFY_ATTEMPTS = 5;
+import {
+  pendingCodes,
+  CODE_TTL_MS,
+  MAX_VERIFY_ATTEMPTS,
+  now,
+} from './shared-store.js';
+import { usersStore, emailIndex, usernameIndex } from './shared-users.js';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+
+async function compareCode(plainCode, storedHash) {
+  const bcrypt = await import('bcryptjs');
+  return bcrypt.compareSync(plainCode, storedHash);
+}
+
+async function hashPassword(password) {
+  const bcrypt = await import('bcryptjs');
+  return bcrypt.hashSync(password, 10);
+}
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -41,47 +54,69 @@ export default async function handler(req, res) {
   try {
     const { email, code, username, password } = req.body || {};
 
-    if (!email || !code) {
-      return res.status(400).json({ success: false, error: 'E-poçt və kod tələb olunur.' });
+    if (!email || !code || !username || !password) {
+      return res.status(400).json({ success: false, error: 'Bütün xanalar doldurulmalıdır.' });
+    }
+
+    // Check duplicate username/email
+    if (usernameIndex.has(username.toLowerCase())) {
+      return res.status(409).json({ success: false, error: 'Bu istifadəçi adı artıq istifadə olunmaktadır.' });
+    }
+    if (emailIndex.has(email.toLowerCase())) {
+      return res.status(409).json({ success: false, error: 'Bu e-poçt ünvanı artıq qeydiyyatdan keçirilib.' });
     }
 
     const entry = pendingCodes.get(email);
 
     if (!entry) {
-      return res.status(400).json({ success: false, error: 'Doğrulama kodu tapılmadı. Zəhmət olmasa, yenidən qeydiyyatdan keçin.' });
+      return res.status(400).json({ success: false, error: 'Doğrulama kodu tapılmadı. Zəhmət olmasa, yenidən qeydiyyatdan başlayın.' });
     }
 
     // Check expiry
     if (now() > entry.expiresAt) {
       pendingCodes.delete(email);
-      return res.status(400).json({ success: false, error: 'Doğrulama koduun müddəti bitib. Yenidən kod təbdir edin.' });
+      return res.status(400).json({ success: false, error: 'Doğrulama kodunun müddəti bitib. Yenidən kod tələb edin.' });
     }
 
-    // Check attempts
+    // Check max attempts
     if (entry.attempts >= MAX_VERIFY_ATTEMPTS) {
       pendingCodes.delete(email);
-      return res.status(400).json({ success: false, error: 'Çoxrəcfə yanlış kodu daxil etdiniz. Yenidən kod təbdir edin.' });
+      return res.status(400).json({ success: false, error: 'Maksimum 5 dəfə səhv kodu daxil etdiniz. Yenidən kod tələb edin.' });
     }
 
     entry.attempts++;
 
-    // Verify code
-    if (entry.code !== String(code)) {
+    // Verify code against stored hash
+    const isValid = await compareCode(String(code), entry.codeHash);
+
+    if (!isValid) {
       const remaining = MAX_VERIFY_ATTEMPTS - entry.attempts;
       return res.status(400).json({
         success: false,
-        error: `Səhv kod. Qalıb cəhd: ${remaining}.`
+        error: `Səhv kod. Qalıb cəhd hüququ: ${remaining}.`
       });
     }
 
     // Code valid — complete registration
-    const user = { username, email, password, createdAt: now() };
-
-    // In a production app, save to a database here (e.g., Vercel Postgres, MongoDB, etc.).
-    // For now we return success; the frontend stores credentials via its own login flow.
     pendingCodes.delete(email);
 
-    // Optional: send welcome email
+    const passwordHash = await hashPassword(password);
+    const userId = String(usersStore.size + 1);
+
+    const user = {
+      id: userId,
+      username,
+      email,
+      passwordHash,
+      emailVerified: true,
+      createdAt: now()
+    };
+
+    usersStore.set(userId, user);
+    emailIndex.set(email.toLowerCase(), userId);
+    usernameIndex.set(username.toLowerCase(), userId);
+
+    // Optional: send welcome email (non-critical if it fails)
     try {
       await resend.emails.send({
         from: FROM_EMAIL,
@@ -119,8 +154,4 @@ export default async function handler(req, res) {
       error: 'Doğrulama zamanı xəta baş verdi. Zəhmət olmasa, daha sonra yenidən cəhd edin.'
     });
   }
-}
-
-function now() {
-  return Date.now();
 }

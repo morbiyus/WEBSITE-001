@@ -1,13 +1,11 @@
 /* ========== VAZEDGAME — App Logic ========== */
 (function(){
   const API_BASE = ''; // same-origin Vercel serverless functions
-  const STORAGE_USERS = 'vz_users';
   const STORAGE_SESSION = 'vz_session';
 
   const app = {
     currentPage: 'home',
-    users: JSON.parse(localStorage.getItem(STORAGE_USERS) || '[]'),
-    session: JSON.parse(localStorage.getItem(STORAGE_SESSION) || 'null'),
+    session: null,
 
     signupState: {
       step: 1,                    // 1 username, 2 email, 3 password, 4 verify
@@ -19,16 +17,58 @@
       resendCooldown: 0,          // timestamp when resend becomes available
       verifyError: '',            // last verification error message
       sending: false,             // API call in flight
-      verifying: false
+      verifying: false,           // verify call in flight
+      resendTimer: null           // countdown timer reference
     },
 
     /* ---------- Init ---------- */
-    init(){
+    async init(){
       this.bindNav();
       this.bindGlobal();
       this.renderGames();
       this.updateNav();
+
+      // Check existing server-side session on load
+      await this.checkSession();
+
       this.show('home');
+    },
+
+    /* ---------- Session Management (backend) ---------- */
+    async checkSession(){
+      try {
+        const resp = await fetch(`${API_BASE}/api/auth/session`, {
+          credentials: 'include'
+        });
+        const data = await resp.json();
+        if (data.authenticated && data.user) {
+          this.session = { username: data.user.username, email: data.user.email };
+        }
+      } catch (err) {
+        console.warn('Session check failed:', err);
+      }
+      this.updateNav();
+    },
+
+    setSession(user){
+      this.session = { username: user.username, email: user.email };
+      this.updateNav();
+      this.show('home');
+    },
+
+    async logout(){
+      try {
+        await fetch(`${API_BASE}/api/auth/logout`, {
+          method: 'POST',
+          credentials: 'include'
+        });
+      } catch (err) {
+        console.warn('Logout request failed:', err);
+      }
+      this.session = null;
+      this.updateNav();
+      this.show('home');
+      this.toast('Sistemdən çıxış etdiniz.');
     },
 
     /* ---------- Navigation ---------- */
@@ -91,34 +131,19 @@
       window.scrollTo(0,0);
     },
 
-    /* ---------- Session ---------- */
-    setSession(user){
-      this.session = {username: user.username, email: user.email};
-      localStorage.setItem(STORAGE_SESSION, JSON.stringify(this.session));
-      this.updateNav();
-      this.show('home');
-    },
-
-    logout(){
-      this.session = null;
-      localStorage.removeItem(STORAGE_SESSION);
-      this.updateNav();
-      this.show('home');
-      this.toast('Sistemdən çıxış etdiniz.');
-    },
-
     /* ---------- Games ---------- */
     renderGames(){
       const games = [
-        {id:'clicker',title:'Klikləyici',icon:'🖱️',desc:'Sadə klikləmə oyunu. Çox kliklə, çox qazanın.'},
-        {id:'memory',title:'Yaddaş Oyunu',icon:'🧠',desc:'Eyni kartları tapın.'},
-        {id:'snake',title:'Yılan',icon:'🐍',desc:'Yılan oyunu (təzə versiya préparationdafadır).'}
+        {id:'clicker',title:'Klikləyici',icon:'🖱️',desc:'Sadə klikləmə oyunu. Hələ hazırlanma mərhələsindədir.', comingSoon: true},
+        {id:'memory',title:'Yaddaş Oyunu',icon:'🧠',desc:'Eyni kartları tapın. Hələ hazırlanma mərhələsindədir.', comingSoon: true},
+        {id:'snake',title:'İlan',icon:'🐍',desc:'İlan oyunu. Hələ hazırlanma mərhələsindədir.', comingSoon: true}
       ];
       const html = games.map(g=>`
-        <div class="game-card" onclick="app.playGame('${g.id}')">
+        <div class="game-card${g.comingSoon ? ' coming-soon' : ''}" onclick="app.playGame('${g.id}')">
           <span class="icon">${g.icon}</span>
           <h3>${this.escape(g.title)}</h3>
           <p>${this.escape(g.desc)}</p>
+          ${g.comingSoon ? '<div class="coming-soon-badge">Tezliklə</div>' : ''}
         </div>
       `).join('');
       const grid = document.getElementById('gamesGrid');
@@ -129,11 +154,11 @@
 
     playGame(id){
       if(!this.session){
-        this.toast('Oynamək üçün əvvəlcə daxil olun.');
+        this.toast('Oynamaq üçün əvvəlcə daxil olun.');
         this.show('auth');
         return;
       }
-      this.toast(`"${id}" oyunu hazırlanma aşamasındadır. Daxil olaraq oynaya bilərsiniz.`);
+      this.toast(`"${id}" oyunu hazırlanma mərhələsindədir. Daxil olaraq oynaya bilərsiniz.`),
     },
 
     renderProfile(){
@@ -141,7 +166,7 @@
       document.getElementById('profileInfo').innerHTML = `
         <div><b>İstifadəçi:</b> ${this.escape(this.session.username)}</div>
         <div><b>E-poçt:</b> ${this.escape(this.session.email)}</div>
-        <div><b>Status:</b> Qeydiyyatdan keçirib,aktiv</div>
+        <div><b>Status:</b> Qeydiyyatdan keçib,aktiv</div>
       `;
     },
 
@@ -152,6 +177,7 @@
         step:1, username:'', email:'', password:'', codeEntered:'',
         codeSent:false, resendCooldown:0, verifyError:'', sending:false, verifying:false
       };
+      this.clearResendTimer();
       this.renderAuth(mode);
     },
 
@@ -160,7 +186,7 @@
       if(mode === 'login'){
         card.innerHTML = `
           <h2>Daxil ol</h2>
-          <p class="hint">Oynamak üçün istifadəçi adınız və şifrənizle daxil olun.</p>
+          <p class="hint">Oynamak üçün istifadəçi adınız və şifrənizlə daxil olun.</p>
           <div class="form-group">
             <label>İstifadəçi adı (Username)</label>
             <input type="text" id="liUsername" placeholder="İstifadəçi adı...">
@@ -204,7 +230,7 @@
             <div class="hint" style="margin-top:6px;color:var(--gray);font-size:.85rem;">Yalnız hərf, rəqəm və alt xətt (_) istifadə edə bilərsiniz. Təkrar oluna bilməz.</div>
           </div>
           <div class="step-actions">
-            <button class="btn btn-yellow" onclick="app.nextStep()">Əvələc</button>
+            <button class="btn btn-yellow" onclick="app.nextStep()">İrəli</button>
           </div>
         `;
       } else if(s.step === 2){
@@ -217,7 +243,7 @@
           </div>
           <div class="step-actions">
             <button class="btn btn-outline" onclick="app.prevStep()">← Geri</button>
-            <button class="btn btn-yellow" onclick="app.nextStep()">Əvələc</button>
+            <button class="btn btn-yellow" onclick="app.nextStep()">İrəli</button>
           </div>
         `;
       } else if(s.step === 3){
@@ -230,7 +256,7 @@
           </div>
           <div class="step-actions">
             <button class="btn btn-outline" onclick="app.prevStep()">← Geri</button>
-            <button class="btn btn-yellow" onclick="app.nextStep()">Əvələc</button>
+            <button class="btn btn-yellow" onclick="app.nextStep()">İrəli</button>
           </div>
         `;
       } else if(s.step === 4){
@@ -273,6 +299,32 @@
 
       card.innerHTML = content;
       this.bindSignupInputs();
+      this.startResendTimer();
+    },
+
+    clearResendTimer(){
+      if(this.signupState.resendTimer){
+        clearInterval(this.signupState.resendTimer);
+        this.signupState.resendTimer = null;
+      }
+    },
+
+    startResendTimer(){
+      this.clearResendTimer();
+      const s = this.signupState;
+      if(s.resendCooldown > 0){
+        s.resendTimer = setInterval(()=>{
+          const remaining = Math.max(0, Math.ceil((s.resendCooldown - Date.now())/1000));
+          const btn = document.getElementById('btnResend');
+          if(btn){
+            btn.disabled = remaining > 0;
+            btn.textContent = remaining > 0 ? `Yenidən göndərə bilərsiniz (${remaining}s)` : 'Kodu yenidən göndər';
+          }
+          if(remaining === 0){
+            this.clearResendTimer();
+          }
+        }, 1000);
+      }
     },
 
     bindSignupInputs(){
@@ -302,20 +354,42 @@
           document.getElementById('errPassword').classList.remove('show');
         });
       }
-      for(let i=0;i<6;i++){
-        const cb = document.getElementById('code'+i);
-        if(cb){
-          cb.addEventListener('input', (e)=>{
-            let v = e.target.value.replace(/\D/g,'').slice(0,1);
-            e.target.value = v;
-            s.codeEntered = Array.from({length:6},(_,j)=>document.getElementById('code'+j).value).join('');
-            if(v && i<5) document.getElementById('code'+(i+1)).focus();
-            document.getElementById('errCode').textContent = '';
-            document.getElementById('errCode').classList.remove('show');
-          });
-          cb.addEventListener('keydown', (e)=>{
-            if(e.key === 'Backspace' && !e.target.value && i>0) document.getElementById('code'+(i-1)).focus();
-          });
+      // Paste support for code boxes — distribute 6 digits across 6 inputs
+      const codeRow = document.getElementById('codeRow');
+      if(codeRow){
+        codeRow.addEventListener('paste', (e)=>{
+          e.preventDefault();
+          const paste = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g,'').slice(0,6);
+          if(!paste) return;
+          for(let i=0;i<6;i++){
+            const cb = document.getElementById('code'+i);
+            if(cb){
+              cb.value = paste[i] || '';
+            }
+          }
+          s.codeEntered = paste;
+          document.getElementById('errCode').textContent = '';
+          document.getElementById('errCode').classList.remove('show');
+          // Move focus to last filled or next empty
+          const lastFilled = paste.length - 1;
+          const next = document.getElementById('code'+Math.min(lastFilled+1, 5));
+          if(next) next.focus();
+        });
+        for(let i=0;i<6;i++){
+          const cb = document.getElementById('code'+i);
+          if(cb){
+            cb.addEventListener('input', (e)=>{
+              let v = e.target.value.replace(/\D/g,'').slice(0,1);
+              e.target.value = v;
+              s.codeEntered = Array.from({length:6},(_,j)=>document.getElementById('code'+j).value).join('');
+              if(v && i<5) document.getElementById('code'+(i+1)).focus();
+              document.getElementById('errCode').textContent = '';
+              document.getElementById('errCode').classList.remove('show');
+            });
+            cb.addEventListener('keydown', (e)=>{
+              if(e.key === 'Backspace' && !e.target.value && i>0) document.getElementById('code'+(i-1)).focus();
+            });
+          }
         }
       }
     },
@@ -336,13 +410,12 @@
       } else if(s.step === 2){
         s.email = document.getElementById('suEmail').value;
         this.sendVerificationCode();
+        return; // step advances asynchronously
       } else if(s.step === 3){
         s.password = document.getElementById('suPassword').value;
       }
-      if(s.step !== 2){ // step 2 handled async by sendVerificationCode
-        s.step++;
-        this.renderSignupStep();
-      }
+      s.step++;
+      this.renderSignupStep();
     },
 
     async sendVerificationCode(){
@@ -420,7 +493,6 @@
         if(!s.username){ this.showErr('errUsername','İstifadəçi adı daxil edin.'); return false; }
         if(!/^[a-zA-Z0-9_]+$/.test(s.username)){ this.showErr('errUsername','Yalnız hərf, rəqəm və alt xətt (_) istifadə edə bilərsiniz.'); return false; }
         if(s.username.length < 3){ this.showErr('errUsername','İstifadəçi adı ən azı 3 simvol olmalıdır.'); return false; }
-        if(this.users.find(u=>u.username.toLowerCase() === s.username.toLowerCase())){ this.showErr('errUsername','Bu istifadəçi adı artıq istifadə olunmaktadır. Başqa bir username seçin.'); return false; }
         return true;
       }
       if(s.step === 2){
@@ -428,13 +500,13 @@
         return true;
       }
       if(s.step === 3){
-        if(!/^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{6,16}$/.test(s.password || '')){ this.showErr('errPassword','Şifrə 6–16 simvol olmalı və hərf, rəqəm və xüsusi işarət enthältmalıdır.'); return false; }
+        if(!/^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{6,16}$/.test(s.password || '')){ this.showErr('errPassword','Şifrə 6–16 simvol olmalı və hərf, rəqəm və xüsusi işarətlərdən ibarət olmalıdır.'); return false; }
         return true;
       }
       if(s.step === 4){
         const confirm = document.getElementById('suConfirm').value;
-        if(confirm !== s.password){ this.showErr('errConfirm','Şifrələr uyğunlaşmıyor. Yenidən yoxlayın.'); return false; }
-        if(s.codeEntered.length !== 6){ this.showErr('errCode','6 xananın tamamını doldurun.'); return false; }
+        if(confirm !== s.password){ this.showErr('errConfirm','Şifrələr uyğun gəlmir. Yenidən yoxlayın.'); return false; }
+        if(s.codeEntered.length !== 6){ this.showErr('errCode','6 xananın hamısını doldurun.'); return false; }
         return true;
       }
       return true;
@@ -445,7 +517,7 @@
       const s = this.signupState;
       const confirm = document.getElementById('suConfirm').value;
       if(confirm !== s.password){
-        this.showErr('errConfirm','Şifrələr uyğunlaşmıyor.');
+        this.showErr('errConfirm','Şifrələr uyğun gəlmir.');
         return;
       }
 
@@ -465,8 +537,6 @@
         });
         const data = await resp.json();
         if(data.success){
-          localStorage.setItem(STORAGE_USERS, JSON.stringify([...this.users, {username:s.username, email:s.email, password:s.password}]));
-          this.users.push({username:s.username, email:s.email, password:s.password});
           this.toast('Qeydiyyat uğurla tamamlandı. İndi daxil ola bilərsiniz.');
           this.authInit({mode:'login'});
         } else {
@@ -481,7 +551,7 @@
       }
     },
 
-    /* ---------- LOGIN ---------- */
+    /* ---------- LOGIN (server-side) ---------- */
     async login(){
       const u = document.getElementById('liUsername').value.trim();
       const p = document.getElementById('liPassword').value;
@@ -489,12 +559,22 @@
         this.toast('İstifadəçi adı və şifrə daxil edin.');
         return;
       }
-      const user = this.users.find(x=>x.username.toLowerCase() === u.toLowerCase() && x.password === p);
-      if(user){
-        this.toast('Xoş gəldiniz, ' + user.username + '!');
-        this.setSession(user);
-      } else {
-        this.toast('Siz Qeydiyyatdan Keçməmisiniz.');
+      try {
+        const resp = await fetch(`${API_BASE}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ username: u, password: p })
+        });
+        const data = await resp.json();
+        if(data.success){
+          this.toast(data.message);
+          this.setSession(data.user);
+        } else {
+          this.toast(data.error || 'Siz Qeydiyyatdan Keçməmisiniz.');
+        }
+      } catch(err){
+        this.toast('Şəbəkə xətası. Zəhmət olmasa, yenidən cəhd edin.');
       }
     },
 
