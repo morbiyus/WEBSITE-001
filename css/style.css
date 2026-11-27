@@ -33,6 +33,35 @@ body{
 a{color:inherit;text-decoration:none;}
 button{cursor:pointer;font-family:inherit;border:none;background:none;}
 
+/* ========== DEMO MODE BANNER ========== */
+.demo-banner{
+  background:var(--yellow);
+  color:var(--black);
+  padding:10px 0;
+  text-align:center;
+  font-size:0.9rem;
+  font-weight:700;
+  border-bottom:1px solid rgba(0,0,0,0.1);
+}
+.demo-banner .container{
+  max-width:1200px;
+  margin:0 auto;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.demo-badge{
+  background:var(--black);
+  color:var(--yellow);
+  padding:2px 8px;
+  border-radius:4px;
+  font-size:0.8rem;
+  text-transform:uppercase;
+  letter-spacing:1px;
+}
+
 /* ========== HEADER ========== */
 .header{
   position:sticky;
@@ -503,6 +532,8 @@ button{cursor:pointer;font-family:inherit;border:none;background:none;}
 
 /* ========== RESPONSIVE ========== */
 @media(max-width:768px){
+  .demo-banner{padding:8px 0;font-size:0.8rem;}
+  .demo-banner .container{flex-direction:column;gap:6px;text-align:center;}
   .nav{padding:12px 20px;}
   .logo{font-size:1.15rem;}
   .hero{padding:40px 20px;flex-direction:column;gap:30px;text-align:center;}

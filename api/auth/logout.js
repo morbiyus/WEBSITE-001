@@ -1,11 +1,10 @@
 /**
- * VAZEDGAME — Server-Side Logout (Vercel serverless function)
+ * VAZEDGAME — Logout (Demo Mode Disabled)
  *
  * Endpoint: POST /api/auth/logout
  *
- * Behavior:
- *  - Clears the session cookie.
- *  - Invalidates the server-side session.
+ * NOTE: Real server-side session management is disabled in zero-budget demo mode.
+ * Logout is handled entirely in the frontend (sessionStorage only).
  */
 
 export default async function handler(req, res) {
@@ -17,24 +16,8 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' });
-  }
-
-  // Clear the session cookie
-  res.setHeader('Set-Cookie', [
-    'vz_session=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0'
-  ]);
-
-  // Invalidate server-side session if it exists
-  const cookieHeader = req.headers.cookie || '';
-  const match = cookieHeader.match(/vz_session=([^;]+)/);
-  if (match && global.__sessions) {
-    global.__sessions.delete(match[1]);
-  }
-
-  return res.status(200).json({
-    success: true,
-    message: 'Sistemdən uğurla çıxış etdiniz.'
+  return res.status(503).json({
+    success: false,
+    error: 'OturumManagement xidməti hal-hazırda mümkün deyildir. Çıxış demo rejimində həyata keçirilir.'
   });
 }

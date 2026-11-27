@@ -1,7 +1,7 @@
-/* ========== VAZEDGAME — App Logic ========== */
+/* ========== VAZEDGAME — App Logic (Demo Mode, Zero Budget) ========== */
 (function(){
-  const API_BASE = ''; // same-origin Vercel serverless functions
-  const STORAGE_SESSION = 'vz_session';
+  const STORAGE_DEMO_SESSION = 'vz_demo_session';
+  const DEMO_MODE = true;
 
   const app = {
     currentPage: 'home',
@@ -13,62 +13,58 @@
       email: '',
       password: '',
       codeEntered: '',
-      codeSent: false,            // true after API confirms code sent
-      resendCooldown: 0,          // timestamp when resend becomes available
-      verifyError: '',            // last verification error message
-      sending: false,             // API call in flight
-      verifying: false,           // verify call in flight
-      resendTimer: null           // countdown timer reference
+      codeSent: false,
+      verifyError: '',
+      sending: false,
+      verifying: false
     },
 
     /* ---------- Init ---------- */
-    async init(){
+    init(){
       this.bindNav();
       this.bindGlobal();
       this.renderGames();
       this.updateNav();
-
-      // Check existing server-side session on load
-      await this.checkSession();
-
+      this.checkDemoSession();
       this.show('home');
     },
 
-    /* ---------- Session Management (backend) ---------- */
-    async checkSession(){
+    /* ---------- Demo Session Management (sessionStorage only, no passwords) ---------- */
+    checkDemoSession(){
       try {
-        const resp = await fetch(`${API_BASE}/api/auth/session`, {
-          credentials: 'include'
-        });
-        const data = await resp.json();
-        if (data.authenticated && data.user) {
-          this.session = { username: data.user.username, email: data.user.email };
+        const raw = sessionStorage.getItem(STORAGE_DEMO_SESSION);
+        if (raw) {
+          const data = JSON.parse(raw);
+          // Only restore username, never password or token
+          if (data && data.username && data.demo === true) {
+            this.session = { username: data.username, email: data.email || '', demo: true };
+          }
         }
       } catch (err) {
-        console.warn('Session check failed:', err);
+        console.warn('Demo session read failed:', err);
       }
       this.updateNav();
     },
 
-    setSession(user){
-      this.session = { username: user.username, email: user.email };
+    setDemoSession(username, email){
+      this.session = { username, email, demo: true };
+      // Store ONLY username + email in sessionStorage (cleared on tab close). NEVER store password.
+      sessionStorage.setItem(STORAGE_DEMO_SESSION, JSON.stringify({
+        username,
+        email,
+        demo: true,
+        createdAt: Date.now()
+      }));
       this.updateNav();
       this.show('home');
     },
 
     async logout(){
-      try {
-        await fetch(`${API_BASE}/api/auth/logout`, {
-          method: 'POST',
-          credentials: 'include'
-        });
-      } catch (err) {
-        console.warn('Logout request failed:', err);
-      }
+      sessionStorage.removeItem(STORAGE_DEMO_SESSION);
       this.session = null;
       this.updateNav();
       this.show('home');
-      this.toast('Sistemdən çıxış etdiniz.');
+      this.toast('Sistemdən çıxış etdiniz (demo rejim).');
     },
 
     /* ---------- Navigation ---------- */
@@ -83,7 +79,7 @@
     navHtml(){
       if(this.session){
         return `
-          <span class="nav-user">Salam, <b>${this.escape(this.session.username)}</b></span>
+          <span class="nav-user">Salam, <b>${this.escape(this.session.username)}</b> <span style="font-size:.75rem;opacity:.7;">(demo)</span></span>
           <button class="btn btn-yellow" onclick="app.logout()">Çıxış</button>
         `;
       }
@@ -102,13 +98,11 @@
       const to = document.getElementById('page-'+page);
       if(!to) return;
 
-      // Reset ALL pages first — guarantees no leftover modal/overlay from previous route
       document.querySelectorAll('.page').forEach(el=>{
         el.classList.remove('page-current','page-enter');
         el.classList.add('page-hidden');
       });
 
-      // Show only the target page
       to.classList.remove('page-hidden');
       to.classList.add('page-enter');
       requestAnimationFrame(()=>{
@@ -158,26 +152,25 @@
         this.show('auth');
         return;
       }
-      this.toast(`"${id}" oyunu hazırlanma mərhələsindədir. Daxil olaraq oynaya bilərsiniz.`),
+      this.toast(`"${id}" oyunu hazırlanma mərhələsindədir.`);
     },
 
     renderProfile(){
       if(!this.session) return;
       document.getElementById('profileInfo').innerHTML = `
         <div><b>İstifadəçi:</b> ${this.escape(this.session.username)}</div>
-        <div><b>E-poçt:</b> ${this.escape(this.session.email)}</div>
-        <div><b>Status:</b> Qeydiyyatdan keçib,aktiv</div>
+        <div><b>E-poçt:</b> ${this.escape(this.session.email || '—')}</div>
+        <div><b>Rejim:</b> Demo (test)</div>
       `;
     },
 
-    /* ---------- AUTH ---------- */
+    /* ---------- AUTH (Demo Mode) ---------- */
     authInit(data){
       const mode = data.mode || 'login';
       this.signupState = {
         step:1, username:'', email:'', password:'', codeEntered:'',
-        codeSent:false, resendCooldown:0, verifyError:'', sending:false, verifying:false
+        verifyError:'', sending:false, verifying:false
       };
-      this.clearResendTimer();
       this.renderAuth(mode);
     },
 
@@ -185,8 +178,8 @@
       const card = document.getElementById('authCard');
       if(mode === 'login'){
         card.innerHTML = `
-          <h2>Daxil ol</h2>
-          <p class="hint">Oynamak üçün istifadəçi adınız və şifrənizlə daxil olun.</p>
+          <h2>Daxil ol (Demo Rejim)</h2>
+          <p class="hint">Bu demo rejimidir. İstifadəçi adınızı və şifrənizi daxil edin. Şifrə heçkėje saxlanılmır.</p>
           <div class="form-group">
             <label>İstifadəçi adı (Username)</label>
             <input type="text" id="liUsername" placeholder="İstifadəçi adı...">
@@ -215,8 +208,8 @@
       const pct = Math.round(((s.step-1)/4)*100);
 
       let content = `
-        <h2>Qeydiyyatdan Keç</h2>
-        <p class="hint">Dörd addımdan ibarət quyidagi prosesini tamamlayın.</p>
+        <h2>Qeydiyyatdan Keç (Demo Rejim)</h2>
+        <p class="hint">Dörd addımdan ibarət quyidagi prosesini tamamlayın. Bu demo rejimidir — e-poçt doğrulaması mümkün deyildir.</p>
         <div class="progress"><div class="progress-bar" style="width:${pct}%"></div></div>
         <div class="step-indicator">${s.step}/4</div>
       `;
@@ -239,7 +232,7 @@
             <label>2. E-poçt ünvanı</label>
             <input type="email" id="suEmail" value="${this.escape(s.email)}" placeholder="ad@mail.com">
             <div class="err-msg" id="errEmail"></div>
-            <div class="hint" style="margin-top:6px;color:var(--gray);font-size:.85rem;">Doğrulama kodu bu ünvana göndəriləcək.</div>
+            <div class="hint" style="margin-top:6px;color:var(--gray);font-size:.85rem;">E-poçt doğrulaması hal-hazırda mümkün deyildir. Bu xana yalnız işarəтивdir.</div>
           </div>
           <div class="step-actions">
             <button class="btn btn-outline" onclick="app.prevStep()">← Geri</button>
@@ -252,7 +245,7 @@
             <label>3. Şifrə yaradın</label>
             <input type="password" id="suPassword" value="${this.escape(s.password)}" placeholder="Ən azı 6, ən çox 16 simvol">
             <div class="err-msg" id="errPassword"></div>
-            <div class="hint" style="margin-top:6px;color:var(--gray);font-size:.85rem;">Hərf, rəqəm və xüsusi işarətlərdən ibarət olmalıdır (6–16 simvol).</div>
+            <div class="hint" style="margin-top:6px;color:var(--gray);font-size:.85rem;">Hərf, rəqəm və xüsusi işarətlərdən ibarət olmalıdır (6–16 simvol). Şifrə heçkəyə saxlanılmır.</div>
           </div>
           <div class="step-actions">
             <button class="btn btn-outline" onclick="app.prevStep()">← Geri</button>
@@ -260,8 +253,6 @@
           </div>
         `;
       } else if(s.step === 4){
-        const cooldownRemaining = Math.max(0, Math.ceil((s.resendCooldown - Date.now())/1000));
-        const canResend = cooldownRemaining === 0;
         content += `
           <div class="form-group">
             <label>4. Şifrəni təkrarla</label>
@@ -269,22 +260,19 @@
             <div class="err-msg" id="errConfirm"></div>
           </div>
           <div class="form-group" style="margin-top:12px;">
-            <label>E-poçtunuza göndəriləcək 6 rəqəmli kodu daxil edin</label>
+            <label>E-poçt doğrulama kodu</label>
             <div class="code-row" id="codeRow">
-              ${Array.from({length:6}).map((_,i)=>`<input type="text" class="code-box" maxlength="1" id="code${i}" autocomplete="off">`).join('')}
+              ${Array.from({length:6}).map((_,i)=>`<input type="text" class="code-box" maxlength="1" id="code${i}" autocomplete="off" placeholder="0">`).join('')}
             </div>
             <div class="err-msg" id="errCode">${s.verifyError}</div>
             <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-              <button class="btn btn-outline" style="padding:6px 12px;font-size:.85rem;" onclick="app.resendCode()" ${!canResend ? 'disabled' : ''} id="btnResend">
-                ${canResend ? 'Kodu yenidən göndər' : `Yenidən göndərə bilərsiniz (${cooldownRemaining}s)`}
-              </button>
-              ${!s.codeSent ? `<span class="hint" style="font-size:.85rem;color:var(--gray);">Kod hələ göndərilməyib.</span>` : ''}
+              <span class="hint" style="font-size:.85rem;color:var(--gray);">Demo rejimində doğrulama kodu tələb olunmur. İstədiyiniz 6 rəqəmi daxil edə bilərsiniz.</span>
             </div>
           </div>
           <div class="step-actions" style="margin-top:14px;">
             <button class="btn btn-outline" onclick="app.prevStep()">← Geri</button>
             <button class="btn btn-yellow" onclick="app.finishSignup()" id="btnFinish" ${s.verifying ? 'disabled' : ''}>
-              ${s.verifying ? 'Yoxlanılır…' : 'Qeydiyyatı Bitir'}
+              ${s.verifying ? 'Yoxlanılır…' : 'Qeydiyyatı Bitir (Demo)'}
             </button>
           </div>
         `;
@@ -299,32 +287,6 @@
 
       card.innerHTML = content;
       this.bindSignupInputs();
-      this.startResendTimer();
-    },
-
-    clearResendTimer(){
-      if(this.signupState.resendTimer){
-        clearInterval(this.signupState.resendTimer);
-        this.signupState.resendTimer = null;
-      }
-    },
-
-    startResendTimer(){
-      this.clearResendTimer();
-      const s = this.signupState;
-      if(s.resendCooldown > 0){
-        s.resendTimer = setInterval(()=>{
-          const remaining = Math.max(0, Math.ceil((s.resendCooldown - Date.now())/1000));
-          const btn = document.getElementById('btnResend');
-          if(btn){
-            btn.disabled = remaining > 0;
-            btn.textContent = remaining > 0 ? `Yenidən göndərə bilərsiniz (${remaining}s)` : 'Kodu yenidən göndər';
-          }
-          if(remaining === 0){
-            this.clearResendTimer();
-          }
-        }, 1000);
-      }
     },
 
     bindSignupInputs(){
@@ -354,42 +316,20 @@
           document.getElementById('errPassword').classList.remove('show');
         });
       }
-      // Paste support for code boxes — distribute 6 digits across 6 inputs
-      const codeRow = document.getElementById('codeRow');
-      if(codeRow){
-        codeRow.addEventListener('paste', (e)=>{
-          e.preventDefault();
-          const paste = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g,'').slice(0,6);
-          if(!paste) return;
-          for(let i=0;i<6;i++){
-            const cb = document.getElementById('code'+i);
-            if(cb){
-              cb.value = paste[i] || '';
-            }
-          }
-          s.codeEntered = paste;
-          document.getElementById('errCode').textContent = '';
-          document.getElementById('errCode').classList.remove('show');
-          // Move focus to last filled or next empty
-          const lastFilled = paste.length - 1;
-          const next = document.getElementById('code'+Math.min(lastFilled+1, 5));
-          if(next) next.focus();
-        });
-        for(let i=0;i<6;i++){
-          const cb = document.getElementById('code'+i);
-          if(cb){
-            cb.addEventListener('input', (e)=>{
-              let v = e.target.value.replace(/\D/g,'').slice(0,1);
-              e.target.value = v;
-              s.codeEntered = Array.from({length:6},(_,j)=>document.getElementById('code'+j).value).join('');
-              if(v && i<5) document.getElementById('code'+(i+1)).focus();
-              document.getElementById('errCode').textContent = '';
-              document.getElementById('errCode').classList.remove('show');
-            });
-            cb.addEventListener('keydown', (e)=>{
-              if(e.key === 'Backspace' && !e.target.value && i>0) document.getElementById('code'+(i-1)).focus();
-            });
-          }
+      for(let i=0;i<6;i++){
+        const cb = document.getElementById('code'+i);
+        if(cb){
+          cb.addEventListener('input', (e)=>{
+            let v = e.target.value.replace(/\D/g,'').slice(0,1);
+            e.target.value = v;
+            s.codeEntered = Array.from({length:6},(_,j)=>document.getElementById('code'+j).value).join('');
+            if(v && i<5) document.getElementById('code'+(i+1)).focus();
+            document.getElementById('errCode').textContent = '';
+            document.getElementById('errCode').classList.remove('show');
+          });
+          cb.addEventListener('keydown', (e)=>{
+            if(e.key === 'Backspace' && !e.target.value && i>0) document.getElementById('code'+(i-1)).focus();
+          });
         }
       }
     },
@@ -409,75 +349,11 @@
         s.username = document.getElementById('suUsername').value;
       } else if(s.step === 2){
         s.email = document.getElementById('suEmail').value;
-        this.sendVerificationCode();
-        return; // step advances asynchronously
       } else if(s.step === 3){
         s.password = document.getElementById('suPassword').value;
       }
       s.step++;
       this.renderSignupStep();
-    },
-
-    async sendVerificationCode(){
-      const s = this.signupState;
-      const email = document.getElementById('suEmail').value.trim();
-      if(!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
-        this.showErr('errEmail','Düzgün e-poçt ünvanı daxil edin.');
-        return;
-      }
-      s.sending = true;
-      this.renderSignupStep();
-      try {
-        const resp = await fetch(`${API_BASE}/api/auth/send-code`, {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({email})
-        });
-        const data = await resp.json();
-        if(data.success){
-          s.codeSent = true;
-          s.resendCooldown = Date.now() + 60000; // 60s cooldown
-          s.step = 3; // skip to password after code sent
-          this.renderSignupStep();
-        } else {
-          this.showErr('errEmail', data.error || 'Kod göndərilə bilmədi.');
-          s.sending = false;
-          this.renderSignupStep();
-        }
-      } catch(err){
-        this.showErr('errEmail','Şəbəkə xətası. Zəhmət olmasa, yenidən cəhd edin.');
-        s.sending = false;
-        this.renderSignupStep();
-      }
-    },
-
-    async resendCode(){
-      const s = this.signupState;
-      const cooldownRemaining = Math.max(0, Math.ceil((s.resendCooldown - Date.now())/1000));
-      if(cooldownRemaining > 0) return;
-      s.sending = true;
-      this.renderSignupStep();
-      try {
-        const resp = await fetch(`${API_BASE}/api/auth/send-code`, {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({email: s.email})
-        });
-        const data = await resp.json();
-        if(data.success){
-          s.resendCooldown = Date.now() + 60000;
-          this.renderSignupStep();
-          this.toast('Yeni kod e-poçtunuza göndərilib.');
-        } else {
-          this.showErr('errCode', data.error || 'Kod yenidən göndərilə bilmədi.');
-          s.sending = false;
-          this.renderSignupStep();
-        }
-      } catch(err){
-        this.showErr('errCode','Şəbəkə xətası.');
-        s.sending = false;
-        this.renderSignupStep();
-      }
     },
 
     prevStep(){
@@ -506,13 +382,17 @@
       if(s.step === 4){
         const confirm = document.getElementById('suConfirm').value;
         if(confirm !== s.password){ this.showErr('errConfirm','Şifrələr uyğun gəlmir. Yenidən yoxlayın.'); return false; }
-        if(s.codeEntered.length !== 6){ this.showErr('errCode','6 xananın hamısını doldurun.'); return false; }
+        // Demo mode: code entry is optional, but require 6 digits if entered
+        if(s.codeEntered.length > 0 && s.codeEntered.length !== 6){
+          this.showErr('errCode','6 xananın hamısını doldurun.');
+          return false;
+        }
         return true;
       }
       return true;
     },
 
-    async finishSignup(){
+    finishSignup(){
       if(!this.validateStep()) return;
       const s = this.signupState;
       const confirm = document.getElementById('suConfirm').value;
@@ -524,58 +404,26 @@
       s.verifying = true;
       this.renderSignupStep();
 
-      try {
-        const resp = await fetch(`${API_BASE}/api/auth/verify-code`, {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({
-            email: s.email,
-            code: s.codeEntered,
-            username: s.username,
-            password: s.password
-          })
-        });
-        const data = await resp.json();
-        if(data.success){
-          this.toast('Qeydiyyat uğurla tamamlandı. İndi daxil ola bilərsiniz.');
-          this.authInit({mode:'login'});
-        } else {
-          s.verifyError = data.error || 'Doğrulama uğursuz oldub.';
-          s.verifying = false;
-          this.renderSignupStep();
-        }
-      } catch(err){
-        s.verifyError = 'Şəbəkə xətası. Yenidən cəhd edin.';
+      // Demo mode: complete registration without any backend call
+      // NEVER store password in sessionStorage or localStorage
+      setTimeout(()=>{
         s.verifying = false;
-        this.renderSignupStep();
-      }
+        this.setDemoSession(s.username, s.email);
+        this.toast('Qeydiyyat demo rejimində tamamlandı. E-poçt doğrulaması mümkün deyildir.');
+      }, 600);
     },
 
-    /* ---------- LOGIN (server-side) ---------- */
-    async login(){
+    /* ---------- LOGIN (Demo Mode) ---------- */
+    login(){
       const u = document.getElementById('liUsername').value.trim();
       const p = document.getElementById('liPassword').value;
       if(!u || !p){
         this.toast('İstifadəçi adı və şifrə daxil edin.');
         return;
       }
-      try {
-        const resp = await fetch(`${API_BASE}/api/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ username: u, password: p })
-        });
-        const data = await resp.json();
-        if(data.success){
-          this.toast(data.message);
-          this.setSession(data.user);
-        } else {
-          this.toast(data.error || 'Siz Qeydiyyatdan Keçməmisiniz.');
-        }
-      } catch(err){
-        this.toast('Şəbəkə xətası. Zəhmət olmasa, yenidən cəhd edin.');
-      }
+      // Demo mode: accept any non-empty credentials, never store password
+      this.setDemoSession(u, 'demo@example.com');
+      this.toast('Demo rejimində daxil olundu. Bu gerçek authentikasiya deyil.');
     },
 
     /* ---------- Utils ---------- */

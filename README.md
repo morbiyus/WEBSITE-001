@@ -1,76 +1,83 @@
 # VAZEDGAME
 
-Veb-bazlı oyun platforması. Qara və Sarı temalı, 3D animasiya ilə səhifə keçidləri, e-poçt doğrulamalı qeydiyyat və server tərəfli authentication.
+Veb-bazlı oyun platforması. Qara və Sarı temalı, 3D animasiya ilə səhifə keçidləri, demo rejimində qeydiyyat və daxil olma.
 
 ## Canlı Sayt
 https://vazedgame.vercel.app
 
-## Xüsusiyyətlər
+## ✅ Xüsusiyyətlər (Tamamlı)
+
 - Sayt adı: **VAZEDGAME** (kartal logosu)
 - Tema: Qara və Sarı
 - 3D animasiya ilə səhifə keçidləri
 - Üst saolda **Daxil ol** və **Qeydiyyatdan Keç** düymələri
-- 4 xanalı Qeydiyyat prosesi:
+- 4 xanalı Qeydiyyat prosesi (demo rejim):
   1. Təkrarlanmayan İstifadəçi adı (hərf, rəqəm, `_`)
-  2. E-poçt ünvanı
+  2. E-poçt ünvanı (doğrulama yoxdur)
   3. Şifrə (6–16 simvol, hərf+rəqəm+xüsusi işarət)
-  4. Şifrə təkrarı + e-poçta 6 rəqəmli kodla təsdiq
-- Gerçek e-poçt doğrulama kodu (Resend vasitəsilə)
-- Server tərəfli giriş (login) və çıxış (logout)
-- Şifrələr bcrypt ilə hashglomérationla saxlanılır
-- HttpOnly, Secure, SameSite=Strict oturum çerezləri
-- Yalnız e-poçt doğrulanmış hesablar daxil ola bilər
+  4. Şifrə təkrarı (doğrulama kodu tələb olunmur)
+- Oyun kataloq (3 oyun, hələ hazırlanma mərhələsində)
+- Profil səhifəsi (demo)
+- Çıxış funksiyası
 - Təklif və şikayət e-poçtı: vasifmikayilov00@gmail.com
+- Responsive dizayn (mobil, planshet, masaüstü)
 
-## Qeydiyyat Maddeleri (Azerbaijanca)
-- Username təkrarlanarsa xəbərdarlıq göstərilir.
-- E-poçt təkrarlanarsa xəbərdarlıq göstərilir.
+## ⚠️ Demo Rejim — Mühütlü Xətaşdır
+
+Bu versiya **sıfır büdcə (zero budget)**-də hazırlanmışdır və **demo rejimində** çalışır:
+
+| Xüsusiyyət | Status | Açıqlama |
+|----------|--------|----------|
+| E-poçt doğrulaması | ❌ Deaktiv-edilib | Real e-poçt xidməti (Resend, SMTP və s.) utilisée edilmir |
+| Gerçek authentikasiya | ❌ Deaktiv-edilib | Daxil olma və qeydiyyat yalnız demo rejimində |
+| Şifrə saxlanması | ❌ Yoxdur | Şifrə heçkədə (localStorage, sessionStorage, server) saxlanılmır |
+| Server oturumu | ❌ Deaktiv-edilib | Oturum yalnız sessionStorage-dadır (sekme bağlandığında silinir) |
+| Veritabanı | ❌ Yoxdur | Heçkə bir veritabanı käyt edilmir |
+
+## Qeydiyyat Maddeleri (Demo, Azerbaijanca)
+
+- Username təkrarlanarsa xəbərdarlıq göstərilir (frontend-də).
+- E-poçt doygunluğu yoxlanılır (frontend-də).
 - Şifrə uyğun olmasa yenidən yoxlama xəbərdarlığı verilir.
-- Bütün xanı doldurdulduqda 6 rəqəmli kod e-poçtuna göndərilir.
-- Kod 5 dəqiqə ərzində qüvvədədir.
-- Maksimum 5 dəfə səhv kodu daxil etmək olar.
-- Kod yenidən göndərilməsi 60 saniyə cooldown ile məhduddur.
-- Daxil olunanda username/şifrə server tərcöhündə yoxlanılır.
+- E-poçt doğrulama kodu tələb olunmur (demo rejim).
+- Daxil olma hər hansı boş olmayan username və şifrə ilə qəbul edilir (demo).
 
 ## Texniki Mımari
+
 - Frontend: Vanilla HTML/CSS/JS (React və ya digər framework istifadə edilmir)
-- Backend: Vercel Serverless Functions (Node.js)
-- E-poçt servisi: Resend (https://resend.com)
-- Şifrə hashilməsi: bcryptjs
-- Verifikasiya kodları: kriptografik təhlükəsiz 6 rəqəmli kodlar, hashləşdirilmiş saxlanılır
-- Oturum: HttpOnly, Secure, SameSite=Strict çerezlər
+- Backend: Yoxdur (api routes 503 qaytarır)
+- E-poçt servisi: Yoxdur (deaktiv-edilib)
+- Şifrə hashilməsi: Yoxdur (şifrə saxlanılmır)
+- Oturum: sessionStorage (yalnız demo, Yerli)
 
-## Tələb olunan Vercel Ortam Dəyşənləri
-Vercel Dashboard → Settings → Environment Variables aşağıdakıları əlavə edin:
+## Tələb olunan Ortam Dəyşənləri
 
-| Dəyişən | Açıqlama |
-|---------|----------|
-| `RESEND_API_KEY` | Resend API açarı (https://resend.com)에서 alın) |
-| `RESEND_FROM_EMAIL` | Doğrulanmış gönderici ünvanı (məs.: onboarding@resend.dev) |
-| `SESSION_SECRET` | Oturum çerez imzalama üçün təsadüfi sır |
+**Heçkə biri tələb olunmur.** Heçkə bir API açarı, veritabanı və ya əobilə xidmət lazımdır.
 
 ## Yerli Depot (GitHub)
 https://github.com/morbiyus/WEBSITE-001
 
 ## Yerli İşə Salmaq
-1. `index.html` faylını hər hansı brauzerdə açın (statik səhifə).
-2. API маршрутları yalnız Vercel-də işləyər (yerli development üçün `vercel dev` istifadə edin).
+
+`index.html` faylını hər hansı brauzerdə açın. API routes yalnız Vercel-də işləyər (503 qaytarır).
 
 ## İnternetdə Açmaq
+
 Bu qovladaki faylları host etdimək lazımdır:
-- Vercel (təslif edilir — api routes fəaliyyətdə)
-- GitHub Pages (yalnız statik fayllar, API routes işləməyəcək)
-- Netlify
+- Vercel (Hobby ücretsiz plan — statik fayllar)
+- GitHub Pages (yalnız statik fayllar)
+- Netlify (ücretsiz plan)
 
 ## Yerli Paket Yükləmə
-```bash
-npm install
-```
+
+Heçkə bir paket yükləmə tələb olunmur (`dependencies: {}`).
 
 ## Vercel Dağıtımı
+
 ```bash
-npm run deploy
+vercel --prod
 ```
 
 ## Qeyd
-Cari versiyada istifadəçi saxlamaq üçün in-memory store istifadə olunur. Vercel serverless funksiyaları cooled başlamaqda bu store sıfırlanır. Production-da istifadəçi və doğrulama kodlarının saxlanılması üçün **Vercel Postgres**, **Supabase** və ya **Upstash Redis** istifadə edilməsi tələb olunur. `api/auth/shared-users.js` və `api/auth/shared-store.js` modulları real veritabanı ilə dəyişdirilməlidir.
+
+Bu versiya **demo amaçlıdır** və gerçek bir oyun platforması deyil. Gerçek authentikasiya, e-poçt doğrulaması və veritabanı üçün ücretli xidmətlər (Vercel Postgres, Supabase, Resend və s.) tələb olunur. Bu reversiya yalınzca 인터feys və demo foydalanıcı akışını göstərir.

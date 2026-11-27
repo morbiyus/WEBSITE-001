@@ -2,16 +2,13 @@
   "name": "vazedgame",
   "version": "1.0.0",
   "private": true,
-  "description": "VAZEDGAME — Black and Yellow gaming platform with email verification",
+  "description": "VAZEDGAME — Black and Yellow gaming platform (demo mode, zero budget, no paid dependencies)",
   "main": "index.html",
   "scripts": {
     "dev": "vercel dev",
     "deploy": "vercel --prod"
   },
-  "dependencies": {
-    "resend": "^3.2.0",
-    "bcryptjs": "^2.4.3"
-  },
+  "dependencies": {},
   "engines": {
     "node": ">=18.0.0"
   }
