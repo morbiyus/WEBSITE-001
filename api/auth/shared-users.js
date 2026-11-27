@@ -1,8 +1,11 @@
 /**
- * VAZEDGAME — Shared User Store
+ * VAZEDGAME — Shared Users Store
  *
- * NOTE: Not used in zero-budget demo mode. Real user storage is disabled.
- * This file is kept for structural compatibility but contains no active logic.
+ * Note: Supabase Auth handles user storage and management.
+ * This module is kept for structural compatibility.
+ * User usernames are stored in Supabase auth.users metadata.
  */
 
+// Supabase integration: user data managed by Supabase
+// Usernames validated on frontend, stored in Supabase user metadata
 module.exports = {};

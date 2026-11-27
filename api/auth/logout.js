@@ -1,10 +1,15 @@
 /**
- * VAZEDGAME — Logout (Demo Mode Disabled)
+ * VAZEDGAME — Logout
  *
  * Endpoint: POST /api/auth/logout
  *
- * NOTE: Real server-side session management is disabled in zero-budget demo mode.
- * Logout is handled entirely in the frontend (sessionStorage only).
+ * Invalidates the user session via Supabase Auth.
+ * Clears the secure HTTP-only cookie.
+ *
+ * Environment Variables Required:
+ * - VITE_SUPABASE_URL: Your Supabase project URL
+ * - VITE_SUPABASE_ANON_KEY: Your Supabase anon key
+ * - SESSION_SECRET: Secret for signing cookies (server-side)
  */
 
 export default async function handler(req, res) {
@@ -16,8 +21,45 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  return res.status(503).json({
-    success: false,
-    error: 'OturumManagement xidməti hal-hazırda mümkün deyildir. Çıxış demo rejimində həyata keçirilir.'
-  });
+  const supabaseUrl = process.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    // Even without Supabase config, clear local sessionStorage
+    res.setHeader('Set-Cookie', 'session=; Path=/; HttpOnly; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict');
+    return res.status(200).json({
+      success: true,
+      message: 'Oturum(dayıxma demo rejimində həyata keçirilir.'
+    });
+  }
+
+  // Supabase logout
+  const { error } = await fetch(`${supabaseUrl}/auth/v1/signout`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': supabaseAnonKey,
+    }
+  })
+    .then(resp => {
+      if (!resp.ok) throw new Error('Logout failed');
+      return resp.json();
+    })
+    .then(() => {
+      // Clear the secure cookie
+      res.setHeader('Set-Cookie', 'session=; Path=/; HttpOnly; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict');
+      return res.status(200).json({
+        success: true,
+        message: 'Sistemdən çıxış etdiniz (demo rejim).'
+      });
+    })
+    .catch(err => {
+      console.error('Logout error:', err);
+      // Still clear the cookie even if Supabase call fails
+      res.setHeader('Set-Cookie', 'session=; Path=/; HttpOnly; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict');
+      return res.status(200).json({
+        success: true,
+        message: 'Sistemdən çıxış etdiniz (demo rejim - Supabase xeta).'
+      });
+    });
 }

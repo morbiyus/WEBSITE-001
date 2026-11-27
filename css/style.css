@@ -407,6 +407,14 @@ button{cursor:pointer;font-family:inherit;border:none;background:none;}
   margin-top:6px;
 }
 
+.step-indicator{
+  color:var(--yellow);
+  font-size:1.2rem;
+  margin-bottom:8px;
+  min-width:30px;
+  text-align:center;
+}
+
 .step-nav{
   margin-top:26px;
   border-top:1px solid rgba(255,255,255,0.1);
