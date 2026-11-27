@@ -8,15 +8,12 @@
     session: null,
 
     signupState: {
-      step: 1,                    // 1 username, 2 email, 3 password, 4 verify
+      step: 1,                    // 1 username, 2 password, 3 finish
       username: '',
       email: '',
       password: '',
-      codeEntered: '',
-      codeSent: false,
       verifyError: '',
-      sending: false,
-      verifying: false
+      sending: false
     },
 
     /* ---------- Init ---------- */
@@ -35,7 +32,6 @@
         const raw = sessionStorage.getItem(STORAGE_DEMO_SESSION);
         if (raw) {
           const data = JSON.parse(raw);
-          // Only restore username, never password or token
           if (data && data.username && data.demo === true) {
             this.session = { username: data.username, email: data.email || '', demo: true };
           }
@@ -48,7 +44,6 @@
 
     setDemoSession(username, email){
       this.session = { username, email, demo: true };
-      // Store ONLY username + email in sessionStorage (cleared on tab close). NEVER store password.
       sessionStorage.setItem(STORAGE_DEMO_SESSION, JSON.stringify({
         username,
         email,
@@ -129,8 +124,8 @@
     renderGames(){
       const games = [
         {id:'clicker',title:'Klikləyici',icon:'🖱️',desc:'Sadə klikləmə oyunu. Hələ hazırlanma mərhələsindədir.', comingSoon: true},
-        {id:'memory',title:'Yaddaş Oyunu',icon:'🧠',desc:'Eyni kartları tapın. Hələ hazırlanma mərhələsindədir.', comingSoon: true},
-        {id:'snake',title:'İlan',icon:'🐍',desc:'İlan oyunu. Hələ hazırlanma mərhələsindədir.', comingSoon: true}
+        {id:'memory',title:'Yaddaş Oyunu',icon:'🧠',desc:'Eyni kartları tapın. Hələ hazırlanma mərhəlesindedir.', comingSoon: true},
+        {id:'snake',title:'İlan',icon:'🐍',desc:'İlan oyunu. Hələ hazırlanma mərhəlesindedir.', comingSoon: true}
       ];
       const html = games.map(g=>`
         <div class="game-card${g.comingSoon ? ' coming-soon' : ''}" onclick="app.playGame('${g.id}')">
@@ -168,8 +163,7 @@
     authInit(data){
       const mode = data.mode || 'login';
       this.signupState = {
-        step:1, username:'', email:'', password:'', codeEntered:'',
-        verifyError:'', sending:false, verifying:false
+        step:1, username:'', email:'', password:'', verifyError:'', sending:false
       };
       this.renderAuth(mode);
     },
@@ -179,7 +173,7 @@
       if(mode === 'login'){
         card.innerHTML = `
           <h2>Daxil ol (Demo Rejim)</h2>
-          <p class="hint">Bu demo rejimidir. İstifadəçi adınızı və şifrənizi daxil edin. Şifrə heçkėje saxlanılmır.</p>
+          <p class="hint">Bu demo rejimidir. İstifadəçi adınızı və şifrənizi daxil edin. Şifrə heçkəyə saxlanılmır.</p>
           <div class="form-group">
             <label>İstifadəçi adı (Username)</label>
             <input type="text" id="liUsername" placeholder="İstifadəçi adı...">
@@ -205,13 +199,13 @@
     renderSignupStep(){
       const s = this.signupState;
       const card = document.getElementById('authCard');
-      const pct = Math.round(((s.step-1)/4)*100);
+      const pct = Math.round(((s.step-1)/3)*100); // 3 steps instead of 4
 
       let content = `
         <h2>Qeydiyyatdan Keç (Demo Rejim)</h2>
-        <p class="hint">Dörd addımdan ibarət quyidagi prosesini tamamlayın. Bu demo rejimidir — e-poçt doğrulaması mümkün deyildir.</p>
+        <p class="hint">Üç addımdan ibarət quyidagi prosesini tamamlayın. Bu demo rejimidir — e-poçt doğrulaması mümkün deyildir.</p>
         <div class="progress"><div class="progress-bar" style="width:${pct}%"></div></div>
-        <div class="step-indicator">${s.step}/4</div>
+        <div class="step-indicator">${s.step}/3</div>
       `;
 
       if(s.step === 1){
@@ -229,20 +223,7 @@
       } else if(s.step === 2){
         content += `
           <div class="form-group">
-            <label>2. E-poçt ünvanı</label>
-            <input type="email" id="suEmail" value="${this.escape(s.email)}" placeholder="ad@mail.com">
-            <div class="err-msg" id="errEmail"></div>
-            <div class="hint" style="margin-top:6px;color:var(--gray);font-size:.85rem;">E-poçt doğrulaması hal-hazırda mümkün deyildir. Bu xana yalnız işarəтивdir.</div>
-          </div>
-          <div class="step-actions">
-            <button class="btn btn-outline" onclick="app.prevStep()">← Geri</button>
-            <button class="btn btn-yellow" onclick="app.nextStep()">İrəli</button>
-          </div>
-        `;
-      } else if(s.step === 3){
-        content += `
-          <div class="form-group">
-            <label>3. Şifrə yaradın</label>
+            <label>2. Şifrə yaradın</label>
             <input type="password" id="suPassword" value="${this.escape(s.password)}" placeholder="Ən azı 6, ən çox 16 simvol">
             <div class="err-msg" id="errPassword"></div>
             <div class="hint" style="margin-top:6px;color:var(--gray);font-size:.85rem;">Hərf, rəqəm və xüsusi işarətlərdən ibarət olmalıdır (6–16 simvol). Şifrə heçkəyə saxlanılmır.</div>
@@ -252,27 +233,23 @@
             <button class="btn btn-yellow" onclick="app.nextStep()">İrəli</button>
           </div>
         `;
-      } else if(s.step === 4){
+      } else if(s.step === 3){
         content += `
           <div class="form-group">
-            <label>4. Şifrəni təkrarla</label>
+            <label>3. Şifrəni təkrarla</label>
             <input type="password" id="suConfirm" placeholder="Şifrəni yenidən daxil edin">
             <div class="err-msg" id="errConfirm"></div>
           </div>
           <div class="form-group" style="margin-top:12px;">
-            <label>E-poçt doğrulama kodu</label>
-            <div class="code-row" id="codeRow">
-              ${Array.from({length:6}).map((_,i)=>`<input type="text" class="code-box" maxlength="1" id="code${i}" autocomplete="off" placeholder="0">`).join('')}
-            </div>
-            <div class="err-msg" id="errCode">${s.verifyError}</div>
-            <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-              <span class="hint" style="font-size:.85rem;color:var(--gray);">Demo rejimində doğrulama kodu tələb olunmur. İstədiyiniz 6 rəqəmi daxil edə bilərsiniz.</span>
-            </div>
+            <label>e-poçt ünvanı (içərisə daxil edə bilərsiniz, doğrulama yoxdur)</label>
+            <input type="email" id="suEmail" value="${this.escape(s.email)}" placeholder="ad@mail.com">
+            <div class="err-msg" id="errEmail"></div>
+            <div class="hint" style="margin-top:6px;color:var(--gray);font-size:.85rem;">Demo rejimində e-poçt doğrulaması mümkün deyildir.</div>
           </div>
           <div class="step-actions" style="margin-top:14px;">
             <button class="btn btn-outline" onclick="app.prevStep()">← Geri</button>
-            <button class="btn btn-yellow" onclick="app.finishSignup()" id="btnFinish" ${s.verifying ? 'disabled' : ''}>
-              ${s.verifying ? 'Yoxlanılır…' : 'Qeydiyyatı Bitir (Demo)'}
+            <button class="btn btn-yellow" onclick="app.finishSignup()" id="btnFinish" ${s.sending ? 'disabled' : ''}>
+              ${s.sending ? 'Yaddaşlanılır…' : 'Qeydiyyatı Bitir (Demo)'}
             </button>
           </div>
         `;
@@ -316,22 +293,7 @@
           document.getElementById('errPassword').classList.remove('show');
         });
       }
-      for(let i=0;i<6;i++){
-        const cb = document.getElementById('code'+i);
-        if(cb){
-          cb.addEventListener('input', (e)=>{
-            let v = e.target.value.replace(/\D/g,'').slice(0,1);
-            e.target.value = v;
-            s.codeEntered = Array.from({length:6},(_,j)=>document.getElementById('code'+j).value).join('');
-            if(v && i<5) document.getElementById('code'+(i+1)).focus();
-            document.getElementById('errCode').textContent = '';
-            document.getElementById('errCode').classList.remove('show');
-          });
-          cb.addEventListener('keydown', (e)=>{
-            if(e.key === 'Backspace' && !e.target.value && i>0) document.getElementById('code'+(i-1)).focus();
-          });
-        }
-      }
+      // No code boxes needed - email verification disabled
     },
 
     showErr(id,msg){
@@ -348,8 +310,6 @@
       if(s.step === 1){
         s.username = document.getElementById('suUsername').value;
       } else if(s.step === 2){
-        s.email = document.getElementById('suEmail').value;
-      } else if(s.step === 3){
         s.password = document.getElementById('suPassword').value;
       }
       s.step++;
@@ -367,26 +327,17 @@
       const s = this.signupState;
       if(s.step === 1){
         if(!s.username){ this.showErr('errUsername','İstifadəçi adı daxil edin.'); return false; }
-        if(!/^[a-zA-Z0-9_]+$/.test(s.username)){ this.showErr('errUsername','Yalnız hərf, rəqəm və alt xətt (_) istifadə edə bilərsiniz.'); return false; }
-        if(s.username.length < 3){ this.showErr('errUsername','İstifadəçi adı ən azı 3 simvol olmalıdır.'); return false; }
+        if(!/^[a-zA-Z0-9_]+$/.test(s.username)){ this.showErr('errUsername,'Yalnız hərf, rəqəm və alt xətt (_) istifadə edə bilərsiniz.'); return false; }
+        if(s.username.length < 3){ this.showErr('errUsername,'İstifadəçi adı ən azı 3 simvol olmalıdır.'); return false; }
         return true;
       }
       if(s.step === 2){
-        if(!s.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.email)){ this.showErr('errEmail','Düzgün e-poçt ünvanı daxil edin.'); return false; }
+        if(!s.password || !/^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{6,16}$/.test(s.password)){ this.showErr('errPassword,'Şifrə 6–16 simvol olmalı və hərf, rəqəm və xüsusi işarətlərdən ibarət olmalıdır.'); return false; }
         return true;
       }
       if(s.step === 3){
-        if(!/^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{6,16}$/.test(s.password || '')){ this.showErr('errPassword','Şifrə 6–16 simvol olmalı və hərf, rəqəm və xüsusi işarətlərdən ibarət olmalıdır.'); return false; }
-        return true;
-      }
-      if(s.step === 4){
         const confirm = document.getElementById('suConfirm').value;
-        if(confirm !== s.password){ this.showErr('errConfirm','Şifrələr uyğun gəlmir. Yenidən yoxlayın.'); return false; }
-        // Demo mode: code entry is optional, but require 6 digits if entered
-        if(s.codeEntered.length > 0 && s.codeEntered.length !== 6){
-          this.showErr('errCode','6 xananın hamısını doldurun.');
-          return false;
-        }
+        if(confirm !== s.password){ this.showErr('errConfirm,'Şifrələr uyğun gəlmir. Yenidən yoxlayın.'); return false; }
         return true;
       }
       return true;
@@ -397,17 +348,17 @@
       const s = this.signupState;
       const confirm = document.getElementById('suConfirm').value;
       if(confirm !== s.password){
-        this.showErr('errConfirm','Şifrələr uyğun gəlmir.');
+        this.showErr('errConfirm,'Şifrələr uyğun gəlmir.');
         return;
       }
 
-      s.verifying = true;
+      s.sending = true;
       this.renderSignupStep();
 
       // Demo mode: complete registration without any backend call
       // NEVER store password in sessionStorage or localStorage
       setTimeout(()=>{
-        s.verifying = false;
+        s.sending = false;
         this.setDemoSession(s.username, s.email);
         this.toast('Qeydiyyat demo rejimində tamamlandı. E-poçt doğrulaması mümkün deyildir.');
       }, 600);
@@ -427,7 +378,7 @@
     },
 
     /* ---------- Utils ---------- */
-    escape(s){return String(s).replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;" }[c]));},
+    escape(s){return String(s).replace(/[&<>"']/g, c=>({ '&':'&','<':'<','>':'>','"':'"',"'":"'" }[c]));},
 
     toast(msg){
       const t = document.getElementById('toast');

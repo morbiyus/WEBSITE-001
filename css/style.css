@@ -432,31 +432,6 @@ button{cursor:pointer;font-family:inherit;border:none;background:none;}
   transition:width .4s ease;
 }
 
-/* verification code boxes */
-.code-row{
-  display:flex;
-  gap:10px;
-  justify-content:center;
-  margin:24px 0;
-}
-.code-box{
-  width:48px;height:56px;
-  text-align:center;
-  font-size:1.75rem;
-  font-weight:800;
-  color:var(--yellow);
-  background:rgba(255,255,255,0.06);
-  border:1px dashed rgba(255,210,0,0.35);
-  border-radius:10px;
-  cursor:text;
-}
-.code-box:focus{
-  outline:none;
-  border-style:solid;
-  border-color:var(--yellow);
-  background:rgba(255,255,255,0.12);
-}
-
 /* ========== PROFILE ========== */
 .profile-section{
   flex:1;
