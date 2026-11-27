@@ -9,7 +9,6 @@
     { "src": "favicon.svg", "use": "@vercel/static" }
   ],
   "routes": [
-    { "src": "/api/auth/(.*)", "status": 200, "headers": { "Content-Type": "application/json" }, "body": { "success": false, "error": "Bu xidmət hal-hazırda demo rejimindədir və müharibəlidir." } },
     { "src": "/(.*)", "dest": "/$1" }
   ],
   "cleanUrls": true,
