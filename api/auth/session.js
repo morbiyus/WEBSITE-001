@@ -14,10 +14,13 @@
  * Note: SESSION_SECRET is not required — Supabase manages session tokens
  * securely via its own authentication mechanism. No custom token signing
  * is needed on this server.
+ *
+ * CORS: This endpoint is configured for same-domain Vercel deployment.
+ *      The frontend (vazedgame.vercel.app) and this API share the same origin.
+ *      No Access-Control-Allow-Origin header is set (same-origin policy applies).
  */
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 

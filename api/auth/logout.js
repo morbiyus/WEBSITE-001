@@ -10,12 +10,15 @@
  * - VITE_SUPABASE_URL: Your Supabase project URL
  * - VITE_SUPABASE_ANON_KEY: Your Supabase anon key
  *
+ * CORS: This endpoint is configured for same-domain Vercel deployment.
+ *      The frontend (vazedgame.vercel.app) and this API share the same origin.
+ *      No Access-Control-Allow-Origin header is set (same-origin policy applies).
+ *
  * Note: SESSION_SECRET is not required — Supabase manages session token
  * invalidation through its signOut endpoint.
  */
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
