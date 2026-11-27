@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "framework": null,
+  "builds": [
+    { "src": "api/auth/*.js", "use": "@vercel/node" },
+    { "src": "index.html", "use": "@vercel/static" },
+    { "src": "css/*.css", "use": "@vercel/static" },
+    { "src": "js/*.js", "use": "@vercel/static" },
+    { "src": "games/*.js", "use": "@vercel/static" }
+  ],
+  "routes": [
+    { "src": "/api/auth/(.*)", "dest": "/api/auth/$1" },
+    { "src": "/(.*)", "dest": "/$1" }
+  ],
+  "cleanUrls": true,
+  "trailingSlash": false
+}

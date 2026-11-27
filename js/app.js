@@ -1,8 +1,8 @@
 /* ========== VAZEDGAME — App Logic ========== */
 (function(){
+  const API_BASE = ''; // same-origin Vercel serverless functions
   const STORAGE_USERS = 'vz_users';
   const STORAGE_SESSION = 'vz_session';
-  const STORAGE_VERIFY = 'vz_verify';
 
   const app = {
     currentPage: 'home',
@@ -10,21 +10,25 @@
     session: JSON.parse(localStorage.getItem(STORAGE_SESSION) || 'null'),
 
     signupState: {
-      step: 1,           // 1 username, 2 email, 3 password, 4 confirm
+      step: 1,                    // 1 username, 2 email, 3 password, 4 verify
       username: '',
       email: '',
       password: '',
-      verifyCode: '',    // 6-digit simulated code
-      codeEntered: ''
+      codeEntered: '',
+      codeSent: false,            // true after API confirms code sent
+      resendCooldown: 0,          // timestamp when resend becomes available
+      verifyError: '',            // last verification error message
+      sending: false,             // API call in flight
+      verifying: false
     },
 
+    /* ---------- Init ---------- */
     init(){
       this.bindNav();
       this.bindGlobal();
       this.renderGames();
       this.updateNav();
-      this.show(this.currentPage, false);
-      // Do not auto-redirect to profile on load; nav reflects login state.
+      this.show('home');
     },
 
     /* ---------- Navigation ---------- */
@@ -53,15 +57,12 @@
       document.getElementById('navActions').innerHTML = this.navHtml();
     },
 
-    /* ---------- Page switching with 3D transition ---------- */
+    /* ---------- Page switching (mutual exclusivity) ---------- */
     show(page, data){
       const to = document.getElementById('page-'+page);
       if(!to) return;
 
-      // Reset ALL pages: hide everything first (mutual exclusivity).
-      // This guarantees no modal/popup/overlay from a previous route
-      // stays visible, and fixes the initial-load case where pages that
-      // were never "shown" never received page-hidden.
+      // Reset ALL pages first — guarantees no leftover modal/overlay from previous route
       document.querySelectorAll('.page').forEach(el=>{
         el.classList.remove('page-current','page-enter');
         el.classList.add('page-hidden');
@@ -76,7 +77,7 @@
       });
 
       this.currentPage = page;
-      this.onPageShow(page, data);
+      this.onPageShow(page, data || {});
     },
 
     onPageShow(page, data){
@@ -110,11 +111,9 @@
     renderGames(){
       const games = [
         {id:'clicker',title:'Klikləyici',icon:'🖱️',desc:'Sadə klikləmə oyunu. Çox kliklə, çox qazanın.'},
-        {id:'memory',title:'Yaddaş Oyunu',icon:'🧠',desc:'Bəzi kartları tapın eyni olanı.'},
-        {id:'snake',title:'Əlan',icon:'🐍',desc:'Yılan oyunu (təzə versiya yaradılacaq).'}
+        {id:'memory',title:'Yaddaş Oyunu',icon:'🧠',desc:'Eyni kartları tapın.'},
+        {id:'snake',title:'Yılan',icon:'🐍',desc:'Yılan oyunu (təzə versiya préparationdafadır).'}
       ];
-      const grid = document.getElementById('gamesGrid');
-      const gridPage = document.getElementById('gamesGridPage');
       const html = games.map(g=>`
         <div class="game-card" onclick="app.playGame('${g.id}')">
           <span class="icon">${g.icon}</span>
@@ -122,6 +121,8 @@
           <p>${this.escape(g.desc)}</p>
         </div>
       `).join('');
+      const grid = document.getElementById('gamesGrid');
+      const gridPage = document.getElementById('gamesGridPage');
       if(grid) grid.innerHTML = html;
       if(gridPage) gridPage.innerHTML = html;
     },
@@ -132,7 +133,7 @@
         this.show('auth');
         return;
       }
-      this.toast(`"${id}" oyunu hazırlanma aşamasındadır, '${this.session.username}' sharply daxil olaraq oynay bilərsiniz.`);
+      this.toast(`"${id}" oyunu hazırlanma aşamasındadır. Daxil olaraq oynaya bilərsiniz.`);
     },
 
     renderProfile(){
@@ -140,14 +141,17 @@
       document.getElementById('profileInfo').innerHTML = `
         <div><b>İstifadəçi:</b> ${this.escape(this.session.username)}</div>
         <div><b>E-poçt:</b> ${this.escape(this.session.email)}</div>
-        <div><b>Status:</b> Qeydiyyatdan keçib,aktiv</div>
+        <div><b>Status:</b> Qeydiyyatdan keçirib,aktiv</div>
       `;
     },
 
     /* ---------- AUTH ---------- */
     authInit(data){
       const mode = data.mode || 'login';
-      this.signupState = {step:1,username:'',email:'',password:'',verifyCode:'',codeEntered:''};
+      this.signupState = {
+        step:1, username:'', email:'', password:'', codeEntered:'',
+        codeSent:false, resendCooldown:0, verifyError:'', sending:false, verifying:false
+      };
       this.renderAuth(mode);
     },
 
@@ -186,7 +190,7 @@
 
       let content = `
         <h2>Qeydiyyatdan Keç</h2>
-        <p class="hint">4 xananadan ibarət quyidagi addımları tam doldurun.</p>
+        <p class="hint">Dörd addımdan ibarət quyidagi prosesini tamamlayın.</p>
         <div class="progress"><div class="progress-bar" style="width:${pct}%"></div></div>
         <div class="step-indicator">${s.step}/4</div>
       `;
@@ -194,13 +198,13 @@
       if(s.step === 1){
         content += `
           <div class="form-group">
-            <label>1. İstifadəçi adı (Username) yaratın</label>
+            <label>1. İstifadəçi adı (Username) yaradın</label>
             <input type="text" id="suUsername" value="${this.escape(s.username)}" placeholder="Məsələn: vazed_123" maxlength="30">
             <div class="err-msg" id="errUsername"></div>
-            <div class="hint" style="margin-top:6px;color:var(--gray);font-size:.85rem;">Rəqəm və alt xətt (_) istifadə edilə bilər. Təkrar oluna bilməz.</div>
+            <div class="hint" style="margin-top:6px;color:var(--gray);font-size:.85rem;">Yalnız hərf, rəqəm və alt xətt (_) istifadə edə bilərsiniz. Təkrar oluna bilməz.</div>
           </div>
           <div class="step-actions">
-            <button class="btn btn-yellow" onclick="app.nextStep()">Əvələč</button>
+            <button class="btn btn-yellow" onclick="app.nextStep()">Əvələc</button>
           </div>
         `;
       } else if(s.step === 2){
@@ -209,43 +213,53 @@
             <label>2. E-poçt ünvanı</label>
             <input type="email" id="suEmail" value="${this.escape(s.email)}" placeholder="ad@mail.com">
             <div class="err-msg" id="errEmail"></div>
+            <div class="hint" style="margin-top:6px;color:var(--gray);font-size:.85rem;">Doğrulama kodu bu ünvana göndəriləcək.</div>
           </div>
           <div class="step-actions">
             <button class="btn btn-outline" onclick="app.prevStep()">← Geri</button>
-            <button class="btn btn-yellow" onclick="app.nextStep()">Əvələč</button>
+            <button class="btn btn-yellow" onclick="app.nextStep()">Əvələc</button>
           </div>
         `;
       } else if(s.step === 3){
         content += `
           <div class="form-group">
-            <label>3. Şifrə yaratın</label>
+            <label>3. Şifrə yaradın</label>
             <input type="password" id="suPassword" value="${this.escape(s.password)}" placeholder="Ən azı 6, ən çox 16 simvol">
             <div class="err-msg" id="errPassword"></div>
             <div class="hint" style="margin-top:6px;color:var(--gray);font-size:.85rem;">Hərf, rəqəm və xüsusi işarətlərdən ibarət olmalıdır (6–16 simvol).</div>
           </div>
           <div class="step-actions">
             <button class="btn btn-outline" onclick="app.prevStep()">← Geri</button>
-            <button class="btn btn-yellow" onclick="app.nextStep()">Əvələč</button>
+            <button class="btn btn-yellow" onclick="app.nextStep()">Əvələc</button>
           </div>
         `;
       } else if(s.step === 4){
+        const cooldownRemaining = Math.max(0, Math.ceil((s.resendCooldown - Date.now())/1000));
+        const canResend = cooldownRemaining === 0;
         content += `
           <div class="form-group">
-            <label>4. Şifrəni təkrarlayın</label>
+            <label>4. Şifrəni təkrarla</label>
             <input type="password" id="suConfirm" placeholder="Şifrəni yenidən daxil edin">
             <div class="err-msg" id="errConfirm"></div>
           </div>
-          <div class="form-group" style="margin-top:10px;">
-            <label>E-poçtunuza göndəriləcək 6 rəqəmli kod</label>
+          <div class="form-group" style="margin-top:12px;">
+            <label>E-poçtunuza göndəriləcək 6 rəqəmli kodu daxil edin</label>
             <div class="code-row" id="codeRow">
               ${Array.from({length:6}).map((_,i)=>`<input type="text" class="code-box" maxlength="1" id="code${i}" autocomplete="off">`).join('')}
             </div>
-            <div class="err-msg" id="errCode"></div>
-            <div class="hint" style="margin-top:8px;color:var(--gray);font-size:.85rem;">Kod ${s.email} ünvanına göndərilib (simulyasiya). 6 xanaya ardıcılıq daxil edin.</div>
+            <div class="err-msg" id="errCode">${s.verifyError}</div>
+            <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <button class="btn btn-outline" style="padding:6px 12px;font-size:.85rem;" onclick="app.resendCode()" ${!canResend ? 'disabled' : ''} id="btnResend">
+                ${canResend ? 'Kodu yenidən göndər' : `Yenidən göndərə bilərsiniz (${cooldownRemaining}s)`}
+              </button>
+              ${!s.codeSent ? `<span class="hint" style="font-size:.85rem;color:var(--gray);">Kod hələ göndərilməyib.</span>` : ''}
+            </div>
           </div>
           <div class="step-actions" style="margin-top:14px;">
             <button class="btn btn-outline" onclick="app.prevStep()">← Geri</button>
-            <button class="btn btn-yellow" onclick="app.finishSignup()">Qeydiyyatı Bitir</button>
+            <button class="btn btn-yellow" onclick="app.finishSignup()" id="btnFinish" ${s.verifying ? 'disabled' : ''}>
+              ${s.verifying ? 'Yoxlanılır…' : 'Qeydiyyatı Bitir'}
+            </button>
           </div>
         `;
       }
@@ -263,7 +277,6 @@
 
     bindSignupInputs(){
       const s = this.signupState;
-      // username live check
       const uInp = document.getElementById('suUsername');
       if(uInp){
         uInp.addEventListener('input', (e)=>{
@@ -289,7 +302,6 @@
           document.getElementById('errPassword').classList.remove('show');
         });
       }
-      // code boxes autofocus
       for(let i=0;i<6;i++){
         const cb = document.getElementById('code'+i);
         if(cb){
@@ -308,66 +320,14 @@
       }
     },
 
-    validateStep(){
-      const s = this.signupState;
-      if(s.step === 1){
-        if(!s.username){
-          this.showErr('errUsername','İstifadəçi adı daxil edin.');
-          return false;
-        }
-        if(!/^[a-zA-Z0-9_]+$/.test(s.username)){
-          this.showErr('errUsername','Yalnız hərf, rəqəm və alt xətt (_) istifadə edə bilərsiniz.');
-          return false;
-        }
-        if(s.username.length < 3){
-          this.showErr('errUsername','İstifadəçi adı ən azı 3 simvol olmalıdır.');
-          return false;
-        }
-        if(this.users.find(u=>u.username.toLowerCase() === s.username.toLowerCase())){
-          this.showErr('errUsername','Bu istifadəçi adı artıq istifadə olunmaktadır. Başqa bir username seçin.');
-          return false;
-        }
-        return true;
-      }
-      if(s.step === 2){
-        if(!s.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.email)){
-          this.showErr('errEmail','Düzgün e-poçt ünvanı daxil edin.');
-          return false;
-        }
-        return true;
-      }
-      if(s.step === 3){
-        if(!/^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{6,16}$/.test(s.password || '')){
-          this.showErr('errPassword','Şifrə 6–16 simvol olmalı və hərf, rəqəm və xüsusi işarət enthältmalıdır.');
-          return false;
-        }
-        return true;
-      }
-      if(s.step === 4){
-        const confirm = document.getElementById('suConfirm').value;
-        if(confirm !== s.password){
-          this.showErr('errConfirm','Şifrələr uyğunlaşmıyor. Yenidən yoxlayın.');
-          return false;
-        }
-        if(s.codeEntered.length !== 6){
-          this.showErr('errCode','6 xananın tamamını doldurun.');
-          return false;
-        }
-        if(s.codeEntered !== s.verifyCode){
-          this.showErr('errCode','Kod səhvdir. Gəndən daxil edilən kodu yoxlayın.');
-          return false;
-        }
-        return true;
-      }
-      return true;
-    },
-
     showErr(id,msg){
       const el = document.getElementById(id);
+      if(!el) return;
       el.textContent = msg;
       el.classList.add('show');
     },
 
+    /* ---------- Steps ---------- */
     nextStep(){
       if(!this.validateStep()) return;
       const s = this.signupState;
@@ -375,14 +335,76 @@
         s.username = document.getElementById('suUsername').value;
       } else if(s.step === 2){
         s.email = document.getElementById('suEmail').value;
-        // simulate sending 6-digit code to email
-        s.verifyCode = Math.floor(100000 + Math.random()*900000).toString();
-        console.log('[SIMULATED EMAIL] Kod', s.verifyCode, 'göndərildi:', s.email);
+        this.sendVerificationCode();
       } else if(s.step === 3){
         s.password = document.getElementById('suPassword').value;
       }
-      s.step++;
+      if(s.step !== 2){ // step 2 handled async by sendVerificationCode
+        s.step++;
+        this.renderSignupStep();
+      }
+    },
+
+    async sendVerificationCode(){
+      const s = this.signupState;
+      const email = document.getElementById('suEmail').value.trim();
+      if(!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+        this.showErr('errEmail','Düzgün e-poçt ünvanı daxil edin.');
+        return;
+      }
+      s.sending = true;
       this.renderSignupStep();
+      try {
+        const resp = await fetch(`${API_BASE}/api/auth/send-code`, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({email})
+        });
+        const data = await resp.json();
+        if(data.success){
+          s.codeSent = true;
+          s.resendCooldown = Date.now() + 60000; // 60s cooldown
+          s.step = 3; // skip to password after code sent
+          this.renderSignupStep();
+        } else {
+          this.showErr('errEmail', data.error || 'Kod göndərilə bilmədi.');
+          s.sending = false;
+          this.renderSignupStep();
+        }
+      } catch(err){
+        this.showErr('errEmail','Şəbəkə xətası. Zəhmət olmasa, yenidən cəhd edin.');
+        s.sending = false;
+        this.renderSignupStep();
+      }
+    },
+
+    async resendCode(){
+      const s = this.signupState;
+      const cooldownRemaining = Math.max(0, Math.ceil((s.resendCooldown - Date.now())/1000));
+      if(cooldownRemaining > 0) return;
+      s.sending = true;
+      this.renderSignupStep();
+      try {
+        const resp = await fetch(`${API_BASE}/api/auth/send-code`, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({email: s.email})
+        });
+        const data = await resp.json();
+        if(data.success){
+          s.resendCooldown = Date.now() + 60000;
+          this.renderSignupStep();
+          this.toast('Yeni kod e-poçtunuza göndərilib.');
+        } else {
+          this.showErr('errCode', data.error || 'Kod yenidən göndərilə bilmədi.');
+          s.sending = false;
+          this.renderSignupStep();
+        }
+      } catch(err){
+        this.showErr('errCode','Şəbəkə xətası.');
+        s.sending = false;
+        this.renderSignupStep();
+      }
     },
 
     prevStep(){
@@ -392,20 +414,81 @@
       }
     },
 
-    finishSignup(){
+    validateStep(){
+      const s = this.signupState;
+      if(s.step === 1){
+        if(!s.username){ this.showErr('errUsername','İstifadəçi adı daxil edin.'); return false; }
+        if(!/^[a-zA-Z0-9_]+$/.test(s.username)){ this.showErr('errUsername','Yalnız hərf, rəqəm və alt xətt (_) istifadə edə bilərsiniz.'); return false; }
+        if(s.username.length < 3){ this.showErr('errUsername','İstifadəçi adı ən azı 3 simvol olmalıdır.'); return false; }
+        if(this.users.find(u=>u.username.toLowerCase() === s.username.toLowerCase())){ this.showErr('errUsername','Bu istifadəçi adı artıq istifadə olunmaktadır. Başqa bir username seçin.'); return false; }
+        return true;
+      }
+      if(s.step === 2){
+        if(!s.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.email)){ this.showErr('errEmail','Düzgün e-poçt ünvanı daxil edin.'); return false; }
+        return true;
+      }
+      if(s.step === 3){
+        if(!/^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{6,16}$/.test(s.password || '')){ this.showErr('errPassword','Şifrə 6–16 simvol olmalı və hərf, rəqəm və xüsusi işarət enthältmalıdır.'); return false; }
+        return true;
+      }
+      if(s.step === 4){
+        const confirm = document.getElementById('suConfirm').value;
+        if(confirm !== s.password){ this.showErr('errConfirm','Şifrələr uyğunlaşmıyor. Yenidən yoxlayın.'); return false; }
+        if(s.codeEntered.length !== 6){ this.showErr('errCode','6 xananın tamamını doldurun.'); return false; }
+        return true;
+      }
+      return true;
+    },
+
+    async finishSignup(){
       if(!this.validateStep()) return;
       const s = this.signupState;
-      const user = {username: s.username, email: s.email, password: s.password};
-      this.users.push(user);
-      localStorage.setItem(STORAGE_USERS, JSON.stringify(this.users));
-      this.toast('Qeydiyyat uğurla tamamlandı. İndi daxil ola bilərsiniz.');
-      this.authInit({mode:'login'});
+      const confirm = document.getElementById('suConfirm').value;
+      if(confirm !== s.password){
+        this.showErr('errConfirm','Şifrələr uyğunlaşmıyor.');
+        return;
+      }
+
+      s.verifying = true;
+      this.renderSignupStep();
+
+      try {
+        const resp = await fetch(`${API_BASE}/api/auth/verify-code`, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            email: s.email,
+            code: s.codeEntered,
+            username: s.username,
+            password: s.password
+          })
+        });
+        const data = await resp.json();
+        if(data.success){
+          localStorage.setItem(STORAGE_USERS, JSON.stringify([...this.users, {username:s.username, email:s.email, password:s.password}]));
+          this.users.push({username:s.username, email:s.email, password:s.password});
+          this.toast('Qeydiyyat uğurla tamamlandı. İndi daxil ola bilərsiniz.');
+          this.authInit({mode:'login'});
+        } else {
+          s.verifyError = data.error || 'Doğrulama uğursuz oldub.';
+          s.verifying = false;
+          this.renderSignupStep();
+        }
+      } catch(err){
+        s.verifyError = 'Şəbəkə xətası. Yenidən cəhd edin.';
+        s.verifying = false;
+        this.renderSignupStep();
+      }
     },
 
     /* ---------- LOGIN ---------- */
-    login(){
+    async login(){
       const u = document.getElementById('liUsername').value.trim();
       const p = document.getElementById('liPassword').value;
+      if(!u || !p){
+        this.toast('İstifadəçi adı və şifrə daxil edin.');
+        return;
+      }
       const user = this.users.find(x=>x.username.toLowerCase() === u.toLowerCase() && x.password === p);
       if(user){
         this.toast('Xoş gəldiniz, ' + user.username + '!');
@@ -426,7 +509,6 @@
     },
 
     bindGlobal(){
-      // allow Enter in auth inputs
       document.addEventListener('keydown', (e)=>{
         if(e.key === 'Enter'){
           const active = document.activeElement;
