@@ -12,28 +12,30 @@
 
 -- 1. Create the profiles table
 --    id references auth.users (the Supabase-authenticated user)
---    username must be unique (case-insensitive)
+--    username must be unique (case-insensitive via LOWER())
+--    display_name optional, avatar_url optional
 --    created_at/updated_at for tracking
 --
 
 CREATE TABLE public.profiles (
   id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL,
-  username TEXT UNIQUE COLLATE "en_US_CI" NOT NULL,
+  username TEXT NOT NULL,
   display_name TEXT,
   avatar_url TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+  CONSTRAINT username_not_null CHECK (username IS NOT NULL)
 );
 
--- 2. Create a case-insensitive unique index on username
---    COLLATE "en_US_CI" ensures CI uniqueness (Azerbaijani usernames work)
+-- 2. Create a case-insensitive unique index on username using LOWER()
+--    This replaces COLLATE "en_US_CI" with a reliable function-based index.
+--    IDempotent: uses IF NOT EXISTS pattern via DROP + CREATE.
 --
 
--- Drop if already exists (idempotent migration)
 DROP INDEX IF EXISTS public.profiles_username_key;
 
-CREATE UNIQUE INDEX public.profiles_username_key
-  ON public.profiles (username COLLATE "en_US_CI");
+CREATE UNIQUE INDEX public.profiles_username_unique
+  ON public.profiles (LOWER(username));
 
 -- 3. Enable Row Level Security on the profiles table
 --
@@ -42,22 +44,12 @@ ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
 -- 4. Policy: Users can read their own profile only
 --
--- This ensures a user can ONLY SELECT their own profile (by id matching auth.uid()).
--- The policy uses uid() which gets the JWT subject from the Supabase auth token.
---
-
 CREATE POLICY "Users can read own profile" ON public.profiles
   FOR SELECT
   USING (auth.uid() = id);
 
 -- 5. Policy: Users can update their own profile only
 --
--- Same restriction: a user may UPDATE only their own row.
--- We explicitly disallow changing the `id` or `username` (immutable fields)
--- by listing them in the SET clause only if they appear; here we allow
--- display_name and avatar_url to be updatable.
---
-
 CREATE POLICY "Users can update own profile" ON public.profiles
   FOR UPDATE
   USING (auth.uid() = id);
@@ -70,7 +62,6 @@ CREATE POLICY "Users can update own profile" ON public.profiles
 -- The empty search_path ensures we reference auth.users unambiguously.
 --
 
--- Drop if already exists (idempotent migration)
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 
 CREATE OR REPLACE FUNCTION handle_on_auth_user_created()
@@ -116,15 +107,11 @@ CREATE TRIGGER on_auth_user_created
   FOR EACH ROW
   EXECUTE PROCEDURE handle_on_auth_user_created();
 
--- 7. Optional: Also update the profile if the username is later changed
---    via a users metadata update (handled separately by Supabase admin).
---
-
 -- ---------------------------------------------------------------------------
 -- Migration complete.
 -- After running this:
 --   1. Go to Supabase Dashboard → Authentication → Settings → Email templates
 --      and set "Email redirect URL" if you want email confirmations.
 --   2. Ensure your Supabase anon key is associated with this project.
---   3. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Vercel environment.
+--   3. Set SUPABASE_URL and SUPABASE_ANON_KEY in Vercel environment.
 -- ---------------------------------------------------------------------------

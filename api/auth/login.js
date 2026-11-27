@@ -3,20 +3,22 @@
  *
  * Endpoint: POST /api/auth/login
  *
- * Authentication via Supabase Auth.
- * Validates credentials against the Supabase backend.
- * Returns user session on success, or error on failure.
+ * Authentication via Supabase Auth using the password grant type.
+ * Validates credentials against the Supabase backend using the correct
+ * REST endpoint: POST /auth/v1/token?grant_type=password.
+ * Returns user session with both access_token and refresh_token on success.
  *
- * Environment Variables Required:
- * - VITE_SUPABASE_URL: Your Supabase project URL
- * - VITE_SUPABASE_ANON_KEY: Your Supabase anon key
+ * Environment Variables Required (in Vercel Dashboard):
+ * - SUPABASE_URL: Your Supabase project URL (server-side)
+ * - SUPABASE_ANON_KEY: Your Supabase publishable/anon key
  *
  * CORS: This endpoint is configured for same-domain Vercel deployment.
  *      The frontend (vazedgame.vercel.app) and this API share the same origin.
  *      No Access-Control-Allow-Origin header is set (same-origin policy applies).
  *
  * Note: SESSION_SECRET is not required — Supabase manages session tokens
- * securely via its own authentication mechanism.
+ * securely via its own authentication mechanism. No custom token signing
+ * is needed on this server.
  */
 
 export default async function handler(req, res) {
@@ -36,18 +38,18 @@ export default async function handler(req, res) {
     });
   }
 
-  // Supabase authentication
-  const supabaseUrl = process.env.VITE_SUPABASE_URL;
-  const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+  // Supabase authentication using the correct password grant endpoint
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
     return res.status(503).json({
       success: false,
-      error: 'Server reconfigured: Supabase konfiqurasiyası yoxdur.'
+      error: 'Server xətası: Supabase konfiqurasiyası yoxdur.'
     });
   }
 
-  const { data, error } = await fetch(`${supabaseUrl}/auth/v1/signin`, {
+  const { data, error } = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -59,25 +61,40 @@ export default async function handler(req, res) {
     })
   })
     .then(resp => {
-      if (!resp.ok) throw new Error('Login failed');
+      if (!resp.ok) {
+        const txt = await resp.text();
+        throw new Error('Login failed: ' + resp.status + ' ' + txt);
+      }
       return resp.json();
     })
     .then(data => {
-      // Set Supabase session cookie
-      if (data.session && data.session.access_token) {
-        res.setHeader('Set-Cookie', `supabase_auth_token=${data.session.access_token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${Math.floor(data.session.expires_in / 1000)}`);
+      // Data contains access_token and refresh_token
+      if (data && data.session && data.session.access_token) {
+        // Set BOTH access_token and refresh_token in secure cookies
+        const maxAge = Math.floor(data.session.expires_in / 1000);
+        res.setHeader('Set-Cookie', [
+          `supabase_access_token=${data.session.access_token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAge}`,
+          `supabase_refresh_token=${data.session.refresh_token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAge}`
+        ]);
+        return res.status(200).json({
+          success: true,
+          user: data.user,
+          session: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+          requireEmailVerification: false
+        });
+      } else {
+        return res.status(401).json({
+          success: false,
+          error: 'Yanlış e-poçt və ya şifrə. Daxil olma imkan yoxdur.'
+        });
       }
-      return res.status(200).json({
-        success: true,
-        user: data.user,
-        session: data.session?.access_token
-      });
     })
     .catch(err => {
       console.error('Login error:', err);
       return res.status(401).json({
         success: false,
-        error: 'Yanlış istifadəçi adı və ya şifrə. Daxil olma imkanı yoxdur.'
+        error: 'Xəta baş verdi. Yanläs credentials.'
       });
     });
 }

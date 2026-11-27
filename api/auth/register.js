@@ -7,13 +7,17 @@
  * Creates user account with username stored as metadata.
  * Email verification is disabled — user may register without confirming email.
  *
- * Environment Variables Required:
- * - VITE_SUPABASE_URL: Your Supabase project URL
- * - VITE_SUPABASE_ANON_KEY: Your Supabase anon key
+ * Environment Variables Required (in Vercel Dashboard):
+ * - SUPABASE_URL: Your Supabase project URL (server-side)
+ * - SUPABASE_ANON_KEY: Your Supabase publishable/anon key
  *
  * CORS: This endpoint is configured for same-domain Vercel deployment.
  *      The frontend (vazedgame.vercel.app) and this API share the same origin.
  *      No Access-Control-Allow-Origin header is set (same-origin policy applies).
+ *
+ * Note: SESSION_SECRET is not required — Supabase manages session tokens
+ * securely via its own authentication mechanism. No custom token signing
+ * is needed on this server.
  */
 
 export default async function handler(req, res) {
@@ -68,8 +72,8 @@ export default async function handler(req, res) {
   }
 
   // Use Supabase Auth to register the user
-  const supabaseUrl = process.env.VITE_SUPABASE_URL;
-  const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
     return res.status(503).json({
