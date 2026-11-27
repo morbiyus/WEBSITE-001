@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VAZEDGAME | Oyna, Qazan, Ləzzətlə</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="js/app.js" defer></script>
+</head>
+<body>
+
+<!-- ========== HEADER ========== -->
+<header class="header" id="mainHeader">
+  <div class="container nav">
+    <a href="#" class="logo" id="logo">
+      <svg viewBox="0 0 120 120" aria-label="VAZEDGAME qartal logo">
+        <path d="M60 10 C30 10 10 30 10 60 C10 90 40 110 60 100 C80 110 110 90 110 60 C110 30 90 10 60 10 Z" fill="#111111"/>
+        <path d="M30 60 L60 30 L90 60 L60 90 Z" fill="#FFD200"/>
+        <circle cx="60" cy="60" r="14" fill="#111111"/>
+        <circle cx="55" cy="55" r="4" fill="#FFFFFF"/>
+        <circle cx="65" cy="55" r="4" fill="#FFFFFF"/>
+      </svg>
+      <span>VAZEDGAME</span>
+    </a>
+    <div class="nav-actions" id="navActions">
+      <!-- Sign up / Login injected by JS -->
+    </div>
+  </div>
+</header>
+
+<!-- ========== 3D TRANSITION WRAPPER ========== -->
+<div class="stage" id="stage">
+  <div class="page page-current" id="page-home">
+    <!-- ========== HERO ========== -->
+    <section class="hero">
+      <div class="hero-content">
+        <h1>VAZEDGAME</h1>
+        <p>Qara və Sarı dünyaya xoş gəldiniz. Burada sadəcə daxil olaraq oyunlar oyalaya bilərsiniz.</p>
+        <div class="hero-actions">
+          <button class="btn btn-yellow" onclick="app.show('auth')">Hazır ol, daxil ol</button>
+          <button class="btn btn-outline" onclick="app.show('games')">Oyunları Gör</button>
+        </div>
+      </div>
+      <div class="hero-eagle">
+        <div class="eagle-wrap">
+          <svg viewBox="0 0 200 200" class="eagle-svg">
+            <path d="M100 20 C60 20 30 50 30 90 C30 130 70 160 100 150 C130 160 170 130 170 90 C170 50 140 20 100 20 Z" fill="#111111"/>
+            <path d="M50 90 L100 50 L150 90 L100 140 Z" fill="#FFD200"/>
+            <circle cx="100" cy="100" r="24" fill="#111111"/>
+            <circle cx="94" cy="94" r="7" fill="#FFFFFF"/>
+            <circle cx="106" cy="94" r="7" fill="#FFFFFF"/>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== GAMES (preview on home) ========== -->
+    <section class="games-section" id="homeGames">
+      <div class="container">
+        <h2 class="section-title">Mövcud Oyunlar</h2>
+        <p class="section-sub">Daxil olaraq aşağıdakı oyunları həmçinin oyalaya bilərsiniz.</p>
+        <div class="games-grid" id="gamesGrid">
+          <!-- games injected by JS -->
+        </div>
+        <div class="games-note">
+          Oyunlar saysını artırmaq və yeni oyunlar əlavə etmək üçün sayt düzgün hazırlandıqdan sonra işə başlıcraq.
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ========== AUTH PAGE (signup/login) ========== -->
+  <div class="page" id="page-auth">
+    <section class="auth-section">
+      <div class="auth-card" id="authCard">
+        <!-- dynamic auth form injected by JS -->
+      </div>
+    </section>
+  </div>
+
+  <!-- ========== GAMES PAGE ========== -->
+  <div class="page" id="page-games">
+    <section class="games-section">
+      <div class="container">
+        <h2 class="section-title">Bütün Oyunlar</h2>
+        <div class="games-grid" id="gamesGridPage">
+          <!-- games injected by JS -->
+        </div>
+        <div class="back-link" onclick="app.show('home')">← Asasukəhəhə səhifəyə qayıt</div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ========== USER PROFILE / DASHBOARD ========== -->
+  <div class="page" id="page-profile">
+    <section class="profile-section">
+      <div class="container">
+        <div class="profile-card">
+          <h2 class="section-title">Profiliniz</h2>
+          <div class="profile-info" id="profileInfo"></div>
+          <button class="btn btn-yellow" onclick="app.logout()">Çıxış et</button>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- ========== FOOTER ========== -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer-brand">
+      <svg viewBox="0 0 60 60" class="footer-logo">
+        <path d="M30 5 C15 5 5 15 5 30 C5 45 20 55 30 50 C40 55 55 45 55 30 C55 15 45 5 30 5 Z" fill="#111111"/>
+        <path d="M15 30 L30 15 L45 30 L30 45 Z" fill="#FFD200"/>
+        <circle cx="30" cy="30" r="7" fill="#111111"/>
+      </svg>
+      <span>VAZEDGAME</span>
+    </div>
+    <p class="footer-note">Təklif və Şikayətlər üçün həyatda doğrudan mənlə əlaqə saxlayın:</p>
+    <a href="mailto:vasifmikayilov00@gmail.com" class="footer-email">vasifmikayilov00@gmail.com</a>
+    <p class="footer-copy">&copy; 2026 VAZEDGAME. Bütün hüquqları qorunur.</p>
+  </div>
+</footer>
+
+<!-- Toast notification -->
+<div class="toast" id="toast"></div>
+
+</body>
+</html>
