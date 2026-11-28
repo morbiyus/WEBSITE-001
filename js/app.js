@@ -58,6 +58,7 @@
       if(this.session) {
         return `
           <span class="nav-user">Salam, <b>${this.escape(this.session.username)}</b> <span style="font-size:.75rem;opacity:.7;">${this.session.demo ? '(demo)' : ''}</span></span>
+          <button class="btn btn-yellow" onclick="app.show('profile')">Profil</button>
           <button class="btn btn-yellow" onclick="app.logout()">Çıxış</button>
         `;
       }
@@ -470,6 +471,7 @@
           };
           this.updateNav();
           this.toast('Avtomatik daxil olundu.');
+        this.show('profile');
         } else {
           this.toast('Qeydiyyat uğurlacompleted, lakin daxil olma imkan yoxdu.');
         }
@@ -506,7 +508,7 @@
           };
           this.updateNav();
           this.toast('Daxil olundu.');
-          this.show('home');
+          this.show('profile');
         } else {
           this.toast('Yanlış e-poçt və ya şifrə. Daxil olma imkan yoxdur.');
         }
