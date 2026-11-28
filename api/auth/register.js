@@ -84,7 +84,7 @@ export default async function handler(req, res) {
 
   try {
     // Register user via Supabase Auth
-    const registerResp = await fetch(`${supabaseUrl}/auth/v1/signUp`, {
+    const registerResp = await fetch(`${supabaseUrl}/auth/v1/signup`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -123,10 +123,17 @@ export default async function handler(req, res) {
         errorMessage = registerData.message;
       }
       if (registerData.description) {
-        // Check if it's a duplicate email error
+        // Check for duplicate email error
         if (registerData.description.includes('already been taken') ||
             registerData.description.includes('duplicate')) {
           errorMessage = 'Bu e-poçt ünvanı allaqen istifadə ediliyor.';
+        }
+        // Check for duplicate username - this occurs when the username already
+        // exists in the profiles table (enforced by DB UNIQUE constraint)
+        else if (registerData.description &&
+                 (registerData.description.includes('username') ||
+                  registerData.description.includes('unique constraint'))) {
+          errorMessage = 'Bu istifadəçi adı allaqen daxil olub.';
         } else if (registerData.description.includes('too short')) {
           errorMessage = 'Şifrə too short (min 6 simvol)';
         }

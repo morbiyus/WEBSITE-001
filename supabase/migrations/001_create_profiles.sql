@@ -29,7 +29,7 @@ CREATE TABLE public.profiles (
 
 -- 2. Create a case-insensitive unique index on username using LOWER()
 --    This replaces COLLATE "en_US_CI" with a reliable function-based index.
---    IDempotent: uses IF NOT EXISTS pattern via DROP + CREATE.
+--    IDempotent: uses DROP + CREATE.
 --
 
 DROP INDEX IF EXISTS public.profiles_username_key;
@@ -44,12 +44,14 @@ ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
 -- 4. Policy: Users can read their own profile only
 --
+
 CREATE POLICY "Users can read own profile" ON public.profiles
   FOR SELECT
   USING (auth.uid() = id);
 
 -- 5. Policy: Users can update their own profile only
 --
+
 CREATE POLICY "Users can update own profile" ON public.profiles
   FOR UPDATE
   USING (auth.uid() = id);
@@ -68,23 +70,28 @@ CREATE OR REPLACE FUNCTION handle_on_auth_user_created()
 RETURNS TRIGGER AS
 $func$
 DECLARE
-  -- Empty search_path forces reference to auth.users (schema-qualified)
+  -- Empty search_path forces reference to auth.users (schema-qualified only)
   _search_path TEXT;
 BEGIN
-  -- Save and set search_path to public so we can reference auth.users directly
+  -- Save and set search_path to empty string so we can reference auth.users directly
   SELECT current_setting('search_path') INTO _search_path;
-  SET LOCAL search_path = 'public';
+  SET search_path = '';
 
-  -- Insert profile using the new user's id and raw_user_meta_data username
-  -- NEW.id is the auth.uid() value (JWT subject)
-  -- NEW.raw_user_meta_data is populated by Supabase when signUp includes options.data
+  -- Insert profile using the new user's id and raw_user_meta_data username.
+  -- The signup flow (frontend + server) always sends a valid username
+  -- in the range 3-30 chars with only letters, numbers, underscores.
+  -- We prefer this username from metadata over any generated fallback.
   INSERT INTO public.profiles (id, username, created_at, updated_at)
   VALUES (
     NEW.id,
-    -- Prefer the username from raw_user_meta_data; fall back to lowercase email prefix
+    -- Use the username from raw_user_meta_data if available.
+    -- If somehow missing, fall back to 'user' (4 chars, valid).
     COALESCE(
-      (NEW.raw_user_meta_data->> 'username')::TEXT,
-      LOWER(SPLIT_PART(NEW.email, '@', 1))
+      NULLIF(
+        (NEW.raw_user_meta_data->> 'username')::TEXT,
+        ''
+      ),
+      'user'
     ),
     NOW(),
     NOW()
@@ -92,7 +99,7 @@ BEGIN
 
   -- Restore original search_path
   IF _search_path IS NOT NULL THEN
-    SET LOCAL search_path = _search_path;
+    SET search_path = _search_path;
   END IF;
 
   -- Important: Do NOT modify NEW inside an AFTER INSERT trigger.
