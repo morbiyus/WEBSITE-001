@@ -5,17 +5,12 @@
 --
 
 -- ---------------------------------------------------------------------------
--- NOTE: Run this migration in the Supabase SQL Editor AFTER creating your
--- project. The trigger below references auth.users and will only work if
--- Supabase Authentication is enabled on the project.
--- ---------------------------------------------------------------------------
-
 -- 1. Create the profiles table
 --    id references auth.users (the Supabase-authenticated user)
 --    username must be unique (case-insensitive via LOWER())
 --    display_name optional, avatar_url optional
 --    created_at/updated_at for tracking
---
+-- ---------------------------------------------------------------------------
 
 CREATE TABLE public.profiles (
   id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL,
@@ -30,7 +25,6 @@ CREATE TABLE public.profiles (
 -- 2. Create a case-insensitive unique index on username using LOWER()
 --    This replaces COLLATE "en_US_CI" with a reliable function-based index.
 --    IDempotent: uses DROP + CREATE.
---
 
 DROP INDEX IF EXISTS public.profiles_username_key;
 
@@ -43,7 +37,9 @@ CREATE UNIQUE INDEX public.profiles_username_unique
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
 -- 4. Policy: Users can read their own profile only
---
+--    Idempotent: DROP IF EXISTS first
+
+DROP POLICY IF EXISTS "Users can read own profile" ON public.profiles;
 
 CREATE POLICY "Users can read own profile" ON public.profiles
   FOR SELECT
@@ -52,16 +48,13 @@ CREATE POLICY "Users can read own profile" ON public.profiles
 -- 5. Policy: Users can update their own profile only
 --
 
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
+
 CREATE POLICY "Users can update own profile" ON public.profiles
   FOR UPDATE
   USING (auth.uid() = id);
 
 -- 6. Create the trigger that auto-creates a profile when a user signs up
---
--- The trigger runs AFTER INSERT on auth.users.
--- It uses SECURITY DEFINER so it runs with the privileges of the function owner
--- (the Supabase service role), allowing it to insert into auth.users' metadata.
--- The empty search_path ensures we reference auth.users unambiguously.
 --
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
@@ -119,6 +112,7 @@ CREATE TRIGGER on_auth_user_created
 -- After running this:
 --   1. Go to Supabase Dashboard → Authentication → Settings → Email templates
 --      and set "Email redirect URL" if you want email confirmations.
+--      Email confirmation is currently DISABLED per product decision.
 --   2. Ensure your Supabase anon key is associated with this project.
 --   3. Set SUPABASE_URL and SUPABASE_ANON_KEY in Vercel environment.
 -- ---------------------------------------------------------------------------
